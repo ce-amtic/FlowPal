@@ -1,0 +1,18 @@
+{
+  "name": "flowpal",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "pnpm dev:app & sleep 3 && pnpm dev:desktop",
+    "dev:server": "tsx watch packages/server/src/main.ts",
+    "dev:app": "pnpm --filter @flowpal/app dev",
+    "dev:desktop": "pnpm --filter @flowpal/desktop dev",
+    "check:fixtures": "pnpm --filter @flowpal/server check:fixtures",
+    "typecheck": "pnpm -r exec tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

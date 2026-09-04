@@ -1,0 +1,20 @@
+{
+  "name": "@flowpal/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.mjs",
+  "scripts": {
+    "build": "esbuild src/main.ts src/preload.ts --bundle --platform=node --format=esm --outdir=dist --out-extension:.js=.mjs --external:electron --external:node:* --banner:js=\"import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);\"",
+    "dev": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron ."
+  },
+  "//": "dev 里的 `env -u ELECTRON_RUN_AS_NODE` 不是多余的：VSCode 的集成终端会设这个变量，带着它启动 Electron 会进 Node 模式，require('electron') 返回一个字符串而不是对象，报错信息跟真正的问题毫无关系。",
+  "dependencies": {
+    "@flowpal/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "electron": "^44.0.0",
+    "esbuild": "^0.24.0"
+  }
+}

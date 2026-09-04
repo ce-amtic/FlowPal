@@ -1,0 +1,25 @@
+{
+  "name": "@flowpal/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check:fixtures": "tsx scripts/check-fixtures.ts"
+  },
+  "//": "这个包不依赖 electron，也不依赖 @flowpal/app。将来要把它抽成独立后端，是把 packages/server 与 packages/shared 拷进新仓库、一行不改。scripts/check-fixtures.ts 里有一条断言扫这里对 electron 的引用。",
+  "dependencies": {
+    "@flowpal/shared": "workspace:*",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14",
+    "openai": "^4.77.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  }
+}
