@@ -1,0 +1,80 @@
+/*
+ * 壳的样式。这里只处理窗框交接处与基础观感——
+ * 布局、陪伴形象、主界面长什么样都还没定，不在这里替它们做决定。
+ */
+
+:root {
+  --bg: transparent;            /* 交给窗口的毛玻璃 */
+  --bg-solid: #faf9f7;          /* 没有毛玻璃时（浏览器 / Windows）的底 */
+  --fg: #1c1b19;
+  --fg-dim: #8a8580;
+  --line: rgba(0, 0, 0, 0.08);
+  --field: rgba(255, 255, 255, 0.6);
+  --field-focus: rgba(255, 255, 255, 0.95);
+  --accent: #b4622f;
+  --titlebar: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-solid: #1d1c1a;
+    --fg: #ece9e4;
+    --fg-dim: #86807a;
+    --line: rgba(255, 255, 255, 0.1);
+    --field: rgba(255, 255, 255, 0.06);
+    --field-focus: rgba(255, 255, 255, 0.11);
+    --accent: #e08b56;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-solid);
+  color: var(--fg);
+  font: 14px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI',
+        'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Electron 里窗口自带毛玻璃，body 得让开，否则盖住它 */
+body.in-electron { background: var(--bg); }
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 标题栏被隐藏了，这条就是拖动窗口的地方；红绿灯压在左边，所以文字往右让 */
+.titlebar {
+  -webkit-app-region: drag;
+  flex: 0 0 var(--titlebar);
+  display: flex;
+  align-items: center;
+  padding: 0 16px 0 92px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  user-select: none;
+}
+
+.titlebar .spacer { flex: 1; }
+.titlebar .hint { font-size: 11px; opacity: 0.75; }
+
+/* 浏览器里没有红绿灯，不用留那块位置 */
+body:not(.in-electron) .titlebar { padding-left: 16px; }
+
+/* 拖动区里的可点击元素必须显式退出，否则点不动 */
+.titlebar button, .titlebar input { -webkit-app-region: no-drag; }
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 24px 32px;
+}
+
+.inner { max-width: 620px; margin: 0 auto; }

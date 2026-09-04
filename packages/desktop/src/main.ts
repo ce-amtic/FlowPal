@@ -9,6 +9,10 @@ import { createServer, loadConfig } from '@flowpal/server'
  * 业务逻辑全在 server 里，渲染进程走 HTTP 调它，不走 IPC——
  * 分界线是「手机端将来要不要得起」：要得起的全在 HTTP 侧。
  */
+// 必须在 whenReady 之前：它同时决定 macOS 菜单栏里显示的名字和 userData 的目录名。
+// 不设的话两者都会是包名 @flowpal/desktop。
+app.setName('FlowPal')
+
 // 开发时 getAppPath() 是 packages/desktop，所以往上两级是仓库根。
 // 一旦开始用 electron-builder 打包，这个假设就不成立了——prompts 与 calendar.json
 // 要作为 extraResources 打进去，这一行要跟着改。
@@ -24,11 +28,28 @@ app.whenReady().then(() => {
   }))
   console.log(`FlowPal server: ${server.url}`)
 
+  const isMac = process.platform === 'darwin'
+
   win = new BrowserWindow({
-    width: 1100,
-    height: 720,
+    width: 880,
+    height: 660,
+    minWidth: 480,
+    minHeight: 420,
+    // 隐藏标题栏，红绿灯内缩：窗口顶部交给界面自己处理，省掉一条系统色带。
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    trafficLightPosition: isMac ? { x: 18, y: 18 } : undefined,
+    // Windows 上没有 hiddenInset，用系统按钮覆盖层顶上。
+    titleBarOverlay: isMac ? undefined : { color: '#00000000', symbolColor: '#888', height: 44 },
+    // 毛玻璃底，窗口背景必须透明才透得出来。
+    vibrancy: isMac ? 'under-window' : undefined,
+    visualEffectState: 'active',
+    backgroundColor: isMac ? '#00000000' : '#faf9f7',
+    show: false,
     webPreferences: { preload: join(import.meta.dirname, 'preload.mjs'), sandbox: false },
   })
+
+  // 等首帧再显示，避免开窗时闪一下白。
+  win.once('ready-to-show', () => win?.show())
 
   if (isDev) win.loadURL('http://localhost:5173')
   else win.loadFile(join(repoRoot, 'packages/app/dist/index.html'))

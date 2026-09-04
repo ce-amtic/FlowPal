@@ -66,5 +66,7 @@ data/        校历（进仓库）与 SQLite（不进）
 
 - VSCode 的集成终端会设 `ELECTRON_RUN_AS_NODE=1`，带着它启动 Electron 会进 Node 模式，
   `require('electron')` 返回字符串而不是对象。`dev:desktop` 里已经把它去掉了。
+- server 固定监听 5123。已经开着 `pnpm dev:server` 再跑 `pnpm dev`，第二个会以
+  `EADDRINUSE` 弹一个 Electron 报错框。`lsof -ti :5123 | xargs kill` 清掉前一个。
 - `data/calendar.json` 现在是占位数据。真实校历从教务系统拉一次替换掉——
   `startMonday` 错了，所有「第 N 周」的解析全盘皆错。

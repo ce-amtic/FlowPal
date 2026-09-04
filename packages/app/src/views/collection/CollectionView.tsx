@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { api, type ItemWithSources } from '../../api.ts'
 import { bridge } from '../../bridge.ts'
+import './collection.css'
+
+const TYPE_LABEL: Record<string, string> = {
+  event: '事件', task: '事务', thought: '念头', progress: '进度', state: '状态',
+}
 
 /**
  * 采集视图：投放区 + 条目列表。
@@ -39,34 +44,46 @@ export function CollectionView() {
 
   return (
     <div>
-      <input
-        id="drop-input"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') throwIn() }}
-        placeholder="扔点什么进来…"
-        disabled={busy}
-        style={{ width: '100%', padding: '10px 12px', fontSize: 14, boxSizing: 'border-box' }}
-      />
+      <div className="drop">
+        <input
+          id="drop-input"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') throwIn() }}
+          placeholder="扔点什么进来…"
+          disabled={busy}
+          autoFocus
+        />
+        {busy && <span className="status">在看…</span>}
+      </div>
 
-      {error && <pre style={{ color: '#b00', whiteSpace: 'pre-wrap', fontSize: 12 }}>{error}</pre>}
+      {error && <pre className="error">{error}</pre>}
 
-      <ul style={{ listStyle: 'none', padding: 0, marginTop: 20 }}>
+      <ul className="items">
         {items.map((item) => (
-          <li key={item.id} style={{ padding: '10px 0', borderBottom: '1px solid #eee' }}>
-            <div style={{ fontSize: 14 }}>{item.title}</div>
-            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-              {item.type}
-              {item.dueAt && ` · 截止 ${item.dueAt}`}
-              {item.startsAt && ` · ${item.startsAt}`}
-              {item.rrule && ` · ${item.rrule}`}
-              {item.confidence === 'medium' && ' · 猜的'}
-              {item.sourceFragmentIds.length > 1 && ` · ${item.sourceFragmentIds.length} 个来源`}
+          <li className="item" key={item.id}>
+            <div className="title">{item.title}</div>
+            <div className="meta">
+              <span className="tag">{TYPE_LABEL[item.type] ?? item.type}</span>
+              {item.dueAt && <span>截止 {formatDate(item.dueAt, item.datePrecision)}</span>}
+              {item.startsAt && <span>{formatDate(item.startsAt, item.datePrecision)}</span>}
+              {item.rrule && <span>{item.rrule}</span>}
+              {item.confidence === 'medium' && <span className="tag guess">猜的</span>}
+              {item.sourceFragmentIds.length > 1 && <span>{item.sourceFragmentIds.length} 个来源</span>}
             </div>
           </li>
         ))}
       </ul>
-      {items.length === 0 && <p style={{ color: '#888', fontSize: 13 }}>还没有条目。</p>}
+
+      {items.length === 0 && !error && <p className="empty">还没有条目。</p>}
     </div>
   )
+}
+
+/** 只有日期没有时刻的，不显示 00:00——那个零点是没有的东西。 */
+function formatDate(iso: string, precision: string | null): string {
+  const d = new Date(iso)
+  const date = `${d.getMonth() + 1} 月 ${d.getDate()} 日`
+  if (precision !== 'minute') return date
+  return `${date} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
