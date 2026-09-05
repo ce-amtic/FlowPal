@@ -128,10 +128,12 @@ export function SettingsView() {
   }
 
   async function openRucLogin() {
-    // Keep the action visible without pretending that a local route is a
-    // login broker.  The Electron-owned CAS/WebView seam is deliberately
-    // explicit until it can persist a protected session and report its role.
-    setMessage('当前构建尚未接入 RUC 登录 broker；可以先导入离线样例验证同步链路。')
+    if (window.flowpal?.openRucLogin) {
+      await window.flowpal.openRucLogin()
+      setMessage('已打开 RUC 登录窗口；登录完成后可立即同步。')
+    } else {
+      setMessage('请在 Electron 桌面端完成 RUC 登录；浏览器模式不保存教务会话。')
+    }
   }
 
   return (
@@ -163,12 +165,12 @@ export function SettingsView() {
               {draft.ruc.authorized ? '已授权' : '未授权'}
             </span>
           </div>
-          <p className="section-note">登录入口已保留；RUC broker 尚未接入当前构建，不会把密码写入 server。</p>
+          <p className="section-note">登录在桌面端独立窗口完成；密码只留在浏览器会话，不会写入 server。</p>
           <dl className="facts">
             <div><dt>角色</dt><dd>{roleLabel(draft.ruc.role)}</dd></div>
             <div><dt>上次会话</dt><dd>{draft.ruc.lastSessionAt ? formatTimestamp(draft.ruc.lastSessionAt) : '尚未登录'}</dd></div>
           </dl>
-          <button type="button" onClick={() => void openRucLogin()}>{draft.ruc.authorized ? '重新授权' : '登录 RUC（待接入）'}</button>
+          <button type="button" onClick={() => void openRucLogin()}>{draft.ruc.authorized ? '重新授权' : '登录 RUC'}</button>
           <div className="capabilities" aria-label="RUC 能力">
             {(sync?.capabilities ?? defaultCapabilities()).map((capability) => (
               <span key={capability.source} className="capability">

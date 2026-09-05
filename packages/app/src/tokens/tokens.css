@@ -87,6 +87,12 @@
   --dur-pet-hint: 120ms;
   /* 循环指示器（转圈）。它不是转场，所以不在上面三档里，也不镜像进 motion.ts */
   --dur-spin: 1000ms;
+  /* 桌宠的物理/传送阶段比通用三档略细，两个入口共用同一组值。 */
+  --dur-pet-depart: 280ms;
+  --dur-pet-land: 260ms;
+  --dur-pet-teleport: 360ms;
+  --dur-pet-hint: 180ms;
+  --shadow-pet-hint: 0 6px 18px rgb(0 0 0 / 12%);
 
   /* ── 结构 ─────────────────────────────────────────────── */
   --titlebar-h: 44px;

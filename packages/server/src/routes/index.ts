@@ -16,6 +16,7 @@ import { newId } from '../store/db.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
 import {
   addItemCitations, addItemSource, getItem, insertItem, itemHistory, listItems, updateItemFields,
+  upsertByExternalId,
 } from '../store/items.ts'
 import type { ItemWithSources } from '../store/items.ts'
 import {
@@ -46,6 +47,13 @@ import { mapStructured } from '../pipeline/map-structured.ts'
 import { buildContext } from '../context/build.ts'
 import { callJson } from '../llm/client.ts'
 import { runAgentLoop, type AgentLoopEvent } from '../agent/loop.ts'
+import {
+  LocalFileError,
+  localIcsPayload,
+  parseIcsRecords,
+  readLocalFile,
+  type LocalFileContents,
+} from '../input/local-file.ts'
 
 /**
  * 冻结的路由清单。界面和（将来的）手机端都只认这几个口，所以三个人可以各写各的，
@@ -172,27 +180,75 @@ export function createRoutes(
       return c.json({ error: '碎片参数不对', issues: parsed.error.issues }, 400)
     }
 
-    const fragment = insertFragment(db, ctx, parsed.data)
+    let localFile: LocalFileContents | null = null
+    let localIcsRecords: ReturnType<typeof parseIcsRecords> | null = null
+    let rawText = parsed.data.rawText ?? null
+    if (parsed.data.rawType === 'file') {
+      if (!parsed.data.rawBlobPath) {
+        return c.json({ error: 'file_requires_path', message: '文件碎片必须带本机路径。' }, 400)
+      }
+      try {
+        localFile = await readLocalFile(parsed.data.rawBlobPath)
+        rawText = localFile.text
+      } catch (error) {
+        if (error instanceof LocalFileError) {
+          return c.json({ error: error.code, message: error.message }, error.status)
+        }
+        throw error
+      }
+    }
+
+    // ICS remains raw_type=file so the original dropped path is visible in
+    // Recent/Item provenance. Its validated records are stored as the same
+    // structured payload consumed by mapStructured, avoiding an LLM call.
+    if (localFile?.kind === 'ics') {
+      try {
+        localIcsRecords = parseIcsRecords(localFile.text, ctx.now)
+        rawText = localIcsPayload(localIcsRecords, ctx.now, localFile.text)
+      } catch (error) {
+        // A malformed calendar is still useful provenance. Preserve the raw
+        // bytes and a terminal run rather than silently dropping the file.
+        const fragment = insertFragment(db, ctx, {
+          ...parsed.data,
+          rawText: localFile.text,
+          rawBlobPath: localFile.originalPath,
+        })
+        const run = startRun(db, ctx, fragment.id)
+        const message = error instanceof LocalFileError
+          ? `${error.message}原文已存。`
+          : 'ICS 文件无法解析；原文已存。'
+        finishRun(db, ctx, run.id, 'failed', message, null)
+        emitRunFinished(run.id, getRun(db, run.id) as Run)
+        broadcastChanged(ctx.now)
+        return c.json({ fragment, run: getRun(db, run.id), items: [], plans: [] })
+      }
+    }
+
+    const fragment = insertFragment(db, ctx, {
+      ...parsed.data,
+      ...(localFile ? { rawText, rawBlobPath: localFile.originalPath } : {}),
+    })
     const run = startRun(db, ctx, fragment.id)
     broadcastChanged(ctx.now)
 
-    // A path alone is not a parseable document.  Do not send an empty body to
-    // the text model and then report a misleading successful extraction.  The
-    // selected file remains an immutable fragment and the UI can offer a
-    // future file adapter (or ask the user to paste/screenshot it).
-    if (fragment.rawType === 'file') {
-      const message = '当前版本暂不支持直接解析此文件；原文已存。'
-      finishRun(db, ctx, run.id, 'failed', message, null)
-      broadcastChanged(ctx.now)
-      return c.json({ fragment, run: getRun(db, run.id), items: [], plans: [] })
-    }
-
     let items: ItemWithSources[] = []
     try {
-      if (fragment.rawType === 'structured') {
+      if (fragment.rawType === 'structured' || localFile?.kind === 'ics') {
         // 结构化来源不经模型，也不走循环；B 的同步路径另有 upsertByExternalId。
         const candidates = mapStructured(ctx, fragment)
-        const itemIds = candidates.map((e) => {
+        let created = 0
+        let updated = 0
+        const itemIds = candidates.map((e, index) => {
+          const externalId = localIcsRecords?.[index]?.externalId
+          if (externalId) {
+            const before = db.prepare(`SELECT id FROM items WHERE external_id = ?`).get(externalId) as
+              { id: string } | undefined
+            const id = upsertByExternalId(db, ctx, fragment.id, externalId, e)
+            if (before) updated += 1
+            else created += 1
+            return id
+          }
+          created += 1
           const id = insertItem(db, ctx, e)
           addItemSource(db, ctx, id, fragment.id)
           addItemCitations(db, id, fragment.id, e)
@@ -200,8 +256,8 @@ export function createRoutes(
         })
         items = itemIds.map((id) => getItem(db, id) as ItemWithSources)
         const counts = {
-          created: itemIds.length,
-          updated: 0,
+          created,
+          updated,
           dropped: 0,
           needsConfirm: items.filter((i) => i.status === 'needs_confirm').length,
         }

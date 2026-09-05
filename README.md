@@ -20,9 +20,14 @@ cp config.example.json config.local.json   # 填模型 baseUrl / apiKey / model
 pnpm dev           # 完整的桌面应用（起界面 + 新 Electron 壳）
 pnpm dev:server    # 只起 server，调管道用。不开 Electron
 pnpm dev:app       # 只起界面，浏览器打开 localhost:5173。不开 Electron
+pnpm dev:mock:desktop # 测试数据 + Electron 桌面应用（不启动真实 server/model）
 pnpm dev:desktop   # 只起新 Electron；界面要另开一个 pnpm dev:app
 pnpm dev:desktop:legacy # 迁移期旧 packages/desktop demo
 ```
+
+测试数据只用于界面和桌宠交互验收，不会调用模型或写入真实数据库。若需要构建一个
+内置样例数据的前端资源，可运行 `pnpm build:app:mock`；真实构建仍使用默认的
+`pnpm --filter @flowpal/app build`。
 
 调 prompt 不需要开界面：
 

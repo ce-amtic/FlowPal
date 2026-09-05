@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { FocusSession, Item } from '@flowpal/shared'
 import { api } from '../../api.ts'
-import { bridge } from '../../bridge.ts'
+import { PetHost } from '../../pet/PetHost.tsx'
+import { usePetStatus } from '../../pet/context.tsx'
 import './focus.css'
 
 type Phase = 'resolving' | 'starting' | 'running' | 'ending' | 'summary' | 'error'
@@ -10,6 +11,7 @@ type Outcome = 'done' | 'continue' | 'early_end'
 
 export function FocusView({ search }: { search: URLSearchParams }) {
   const navigate = useNavigate()
+  const { setStatus: setPetStatus } = usePetStatus()
   const itemId = search.get('item')
   const requestedMinutes = clampMinutes(Number(search.get('minutes') ?? 25))
   const [item, setItem] = useState<Item | null>(null)
@@ -40,7 +42,7 @@ export function FocusView({ search }: { search: URLSearchParams }) {
         if (existing) {
           setSession(existing)
           setPhase('running')
-          bridge.setPetStatus?.('focus')
+          setPetStatus('focus')
           return
         }
 
@@ -53,12 +55,12 @@ export function FocusView({ search }: { search: URLSearchParams }) {
         if (cancelled) return
         setSession(result.session)
         setPhase('running')
-        bridge.setPetStatus?.('focus')
+        setPetStatus('focus')
       } catch (cause) {
         if (cancelled) return
         setError(toMessage(cause))
         setPhase('error')
-        bridge.setPetStatus?.('error', { message: toMessage(cause) })
+        setPetStatus('error', { message: toMessage(cause) })
       }
     }
     void resolve()
@@ -92,17 +94,18 @@ export function FocusView({ search }: { search: URLSearchParams }) {
         outcome: result.summary.outcome,
       })
       setPhase('summary')
-      bridge.setPetStatus?.(outcome === 'done' ? 'done' : 'idle')
+      setPetStatus(outcome === 'done' ? 'done' : 'idle')
     } catch (cause) {
       setError(toMessage(cause))
       setPhase('error')
-      bridge.setPetStatus?.('error', { message: toMessage(cause) })
+      setPetStatus('error', { message: toMessage(cause) })
     }
   }
 
   if (phase === 'error') {
     return (
       <section className="focus-page" aria-labelledby="focus-title">
+        <PetHost className="focus-pet" interactive={false} />
         <p className="eyebrow">专注</p>
         <h1 id="focus-title">暂时无法开始</h1>
         <p className="focus-error">{error}</p>
@@ -117,6 +120,7 @@ export function FocusView({ search }: { search: URLSearchParams }) {
   if (phase === 'summary') {
     return (
       <section className="focus-page focus-summary" aria-labelledby="focus-title">
+        <PetHost className="focus-pet" interactive={false} />
         <p className="eyebrow">专注结束</p>
         <h1 id="focus-title">这段时间记下了</h1>
         <p className="summary-time">{summary?.durationMinutes ?? elapsed} 分钟</p>
@@ -133,6 +137,7 @@ export function FocusView({ search }: { search: URLSearchParams }) {
 
   return (
     <section className="focus-page" aria-labelledby="focus-title">
+      <PetHost className="focus-pet" interactive={false} />
       <p className="eyebrow">专注中</p>
       <h1 id="focus-title">{item?.title ?? '这段时间，先只做一件事'}</h1>
       <p className="focus-subtitle">桌宠会安静地在这里。完成后只需要告诉我：完成，或下次继续。</p>

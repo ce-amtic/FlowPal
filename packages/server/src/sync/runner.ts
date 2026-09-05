@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
-import type { Ctx, ExternalSource } from '@flowpal/shared'
+import type { Ctx, RucExternalSource } from '@flowpal/shared'
 import { ExternalShapeError, UnsupportedExternalSourceError, type ExternalRecord, type SyncIngestResult } from './types.ts'
 import { normalizePortalPayload } from './portal-source.ts'
 import { normalizeGraduatePayload, type GraduateTerm } from './graduate-source.ts'
@@ -8,7 +8,7 @@ import { ingestExternalRecords } from './structured-import.ts'
 
 export type FixtureSyncRequest = {
   mode: 'fixture'
-  source: ExternalSource
+  source: RucExternalSource
   payload: unknown
   /** Required for the graduate source because its endpoint is term-scoped. */
   term?: GraduateTerm
@@ -16,7 +16,7 @@ export type FixtureSyncRequest = {
 
 export type OnlineSyncRequest = {
   mode: 'online'
-  source: ExternalSource
+  source: RucExternalSource
   term?: GraduateTerm
 }
 
@@ -32,7 +32,7 @@ const BUNDLED_GRADUATE_TERM: GraduateTerm = {
  * run.  Keeping this loader beside the runner means packaged server callers do
  * not need to guess a cwd-relative fixtures path.
  */
-export function bundledFixtureRequest(source: ExternalSource): FixtureSyncRequest {
+export function bundledFixtureRequest(source: RucExternalSource): FixtureSyncRequest {
   const filename = source === 'ruc.portal' ? 'portal-schedule.json' : 'graduate-timetable.json'
   const payload = JSON.parse(readFileSync(new URL(`./fixtures/${filename}`, import.meta.url), 'utf8')) as unknown
   return source === 'ruc.portal'
@@ -122,8 +122,8 @@ export async function runRucSyncBatch(
     records: await normalizeRucRequest(request, ctx.now, broker),
   })))
   const records = normalized.flatMap((entry) => entry.records)
-  const rawPayloadBySource: Partial<Record<ExternalSource, unknown>> = {}
-  const emptyBatches: Array<{ source: ExternalSource; kind: 'calendar' | 'timetable'; rawPayload: unknown }> = []
+  const rawPayloadBySource: Partial<Record<RucExternalSource, unknown>> = {}
+  const emptyBatches: Array<{ source: RucExternalSource; kind: 'calendar' | 'timetable'; rawPayload: unknown }> = []
   for (const { request, records: sourceRecords } of normalized) {
     if (request.mode !== 'fixture') continue
     rawPayloadBySource[request.source] = request.payload

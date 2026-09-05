@@ -132,8 +132,10 @@ shader 和交互拆到受 CSP 约束的 TypeScript 模块，避免把原 HTML �
 - 随机 mood 作为业务状态的做法。
 
 原型的 shader、软团体形变、凝视和 pointer 弹簧均可直接沿用；只把其 DOM/事件
-接线改为 `pet.html` + `PetRenderer` + typed preload。桌面常驻默认使用原型的
-“桌面 96”尺寸，224 logical px 只作为显式放大 preset，不作为默认窗口尺寸。
+接线改为 `pet.html` + `PetRenderer` + typed preload。原型的“桌面 96”只作为视觉
+比例参考，生产呈现采用两档尺寸：主页面 A 为 148×148 logical px，遮挡后悬浮 B 为
+224×224 logical px。A/B 的切换由 Electron 主进程控制，renderer 只负责同一套形象
+的缩放和动画。
 
 生产 renderer 的唯一业务入口是协议状态，而不是原型按钮：
 
@@ -151,7 +153,7 @@ interface PetRenderer {
   setStatus(status: PetStatus, meta?: { message?: string }): void
   setTheme(theme: {
     color?: 'chalk' | 'fog' | 'stone'
-    size?: 96 | 224
+    size?: 148 | 224
     reducedMotion?: boolean
   }): void
   hitTest(localPoint: { x: number; y: number }): boolean
@@ -213,16 +215,19 @@ CSS/SVG fallback。不能把原型的 `alpha:false` 不透明矩形直接放进�
   npm registry（`ENOTFOUND`）影响，不能据此宣称全仓检查通过。
 - P0-0 的独立 renderer 已完成代码切片；P0-1 的新壳代码已落地并新增
   `packages/electron/{src/main.ts,src/preload.ts,src/ipc/**,src/windows/**,src/lifecycle/**}`。
-  新壳实现单实例、主窗、透明 96px pet 窗（224px 可显式放大）、dev/prod app 路径、typed preload、基础
+  新壳实现单实例、主窗、透明 pet 窗、dev/prod app 路径、typed preload、基础
   hit/drag IPC 与 server 生命周期；旧 `packages/desktop` 仍只作迁移期参考。
 - `packages/app/src/pet/main.ts` 已把 `hit`、拖动和主进程 status command 接到窄 bridge；
   preload 同时保留旧的四个 flat 方法和新的 grouped `pet/input/windows/capture` 面。
-- 已通过 Electron shell 的 strict TypeScript 检查（使用仅用于本机检查的 ambient shim）与
-  esbuild main/preload bundle；当前环境没有可执行 Electron binary，尚未宣称真实窗口
-  smoke 通过。P0-1 的真实验收仍需在安装 Electron 后检查透明边缘、第二实例聚焦、跨屏拖动
-  和关闭/重建后的 listener/drag 清理。
+- 已通过 Electron shell 的 strict TypeScript 检查与 esbuild main/preload bundle；本机
+  Electron 44 已能启动生产主窗口。透明边缘、第二实例聚焦、跨屏拖动和关闭/重建后的
+  listener/drag 清理仍需在目标平台逐项视觉验收。
 - `FLOWPAL_APP_URL` 默认仅允许本机 dev server；`FLOWPAL_APP_DIST` 可用于未打包的
   file-mode smoke；主进程拒绝未列入 HashRouter 白名单的导航路径。
+- Electron 启动时即使没有 `config.local.json` 也会用仓库内的
+  `config.example.json` 启动本地 server（dataDir 仍落在 Electron userData）；因此主界面
+  的读取/空态/设置页不会因 `Failed to fetch` 失效。模型投放等需要密钥的动作仍保持失败态，
+  用户补齐本地配置后无需改代码即可启用。
 - P0-2/P0-4 的 shared contract、v4→v5 migration、settings/focus/sync store 与
   `/focus`、`/settings` 路由已落地；`packages/server/scripts/check-b-api.ts` 的
   schema、secret redaction、revision、focus 幂等和 unsupported sync smoke 通过。
@@ -238,10 +243,70 @@ CSS/SVG fallback。不能把原型的 `alpha:false` 不透明矩形直接放进�
   截图与拖宠采集、快捷键/剪贴板/文件 drop 到 fragment/run 的主窗口编排、receipt 气泡、
   本科课表和考试接口。它们在 API/UI 中保持显式 unsupported 或待探针状态。
 
+#### 交互逻辑剩余清单（2026-09-06）
+
+按“现有代码可闭环”与“需要平台权限/外部协议”拆分，后续实现不得跳过退出门槛：
+
+- [x] 桌宠形状命中、点击回主界面、悬停提示、原生拖拽与拖拽期间的穿透锁定。
+- [x] 主窗口 inline A 尺寸 / 独立窗口 B 尺寸、失焦右下角传送、聚焦回场、最小化延迟与布局占位动画。
+- [x] 文件 drop：路径白名单、图片/文本/ICS 分类、fragment/run 回执、失败原文保留。
+- [x] 文本剪贴板：桌宠长按、快捷键、统一队列、`/api/fragments` 投递和状态回执。
+- [x] 剪贴板图片：Electron 主进程读取系统图片并写入临时 PNG/JPG，主 renderer 以
+  `rawType=image` 投递到已有 vision pipeline；无图无文时给出明确错误回执。
+- [x] 系统截图/窗口采集基础链路：Electron `desktopCapturer` 权限探针、屏幕/窗口 source
+  选择和临时 PNG 输出已接入；仍需目标 macOS 机器授予屏幕录制权限后做视觉验收。
+- [x] 在线 RUC CAS broker 基础链路：`persist:ruc` 登录窗口、门户 Cookie、研究生 Cookie
+  bootstrap/重试和在线 normalizer 已接入；本科 JWT/考试 adapter 仍未勾选。
+- [ ] 本科课表和考试 adapter：只有真实契约或 fixture 通过后才勾选。
+- [ ] 真实 Electron smoke：透明边缘、第二实例、跨屏拖动、macOS 最小化/恢复顺序。
+
+当前实现退出门槛：`packages/app` 与 `packages/electron` strict TypeScript、Electron
+main/preload bundle、`git diff --check` 均通过；截图需 macOS 权限验收，本科/考试和真实
+窗口 smoke 仍是明确的后续项。
+
+#### 桌宠呈现迁移更新（2026-09-05）
+
+- 主页面内嵌桌宠固定为 A 尺寸（148×148）；Electron 独立窗口使用 B 尺寸（224×224）。
+  B 窗口从内嵌桌宠的屏幕坐标开始，保持 `alwaysOnTop`，先在原地起跳，再瞬时传送到
+  当前显示器工作区右下角；失焦即启动，不依赖屏幕录制权限或遮挡探测。
+- 失焦出发先播放约 280ms 的原地弹跳，抵达右下角后播放约 260ms 的低高度落地；主窗口
+  重新获得焦点时，B 在右下角弹跳消失（280ms），隐藏 native pet，再在原内嵌位置以 A
+  尺寸播放传送到达/低位落地（360ms）。presentation 事件通过 typed preload 同时驱动
+  两个 renderer，避免重复状态机。
+- 最小化或隐藏事件走强制停靠分支：取消正在进行的迁移，直接显示置顶 B 窗口并设到右下角，
+  避免 blur/minimize 事件顺序差异导致桌宠停在原位置。
+- 桌宠点击契约：悬停时显示非阻塞陪伴气泡（“有新点子吗？告诉我吧，或者把任务拖给我～”），
+  悬浮态单击留在桌宠窗口内并触发抚摸/弹簧反馈；主窗口导航通过 Space/P 或明确输入动作完成。
+  删除双击状态机，避免透明窗口下的 click/dblclick 合成和穿透竞态。
+  长按阈值为 800ms 并读取剪贴板，拖动仍保留原生拖拽。透明窗口的形状命中切换使用同步
+  `sendSync` IPC，避免鼠标刚进入桌宠时首个单击在命中状态更新前穿透到下层主窗口。
+  气泡不用系统模态框，避免透明桌宠窗口被模态焦点打断。
+- 文件投放按扩展名分流：文本/ICS 使用安全本地文件读取，PNG/JPEG/WebP 等图片使用
+  `rawType: image` 进入视觉模型；未实现的系统截图探针继续保持显式 unsupported。
+- 若在 Codex 的 macOS seatbelt 沙箱内直接运行 Electron，macOS LaunchServices 可能在
+  Electron 初始化前触发 SIGABRT；这不是 FlowPal renderer 或主进程异常。桌面验证需在
+  沙箱外终端运行（本机同一 Electron 44.2.0 已验证可启动）。
+- 失焦迁移增加 700ms 状态恢复兜底：若主窗仍失焦但 native pet 实际不可见，会重新创建/停靠
+  并显示悬浮窗，避免子窗口切换中断迁移后状态标记与实际可见性不一致。
+- macOS 最小化会先取消 blur 触发的迁移并隐藏桌宠，延迟 1 秒确认窗口仍处于最小化状态
+  后才显示右下角悬浮窗，避开系统最小化动画造成的闪烁；恢复窗口会取消该延迟任务。
+- native pet 从创建开始就使用 B 尺寸和右下角目标位置，传送期间不再执行 A→B 的可见
+  resize；renderer 同时使用 layout 尺寸（`offsetWidth/offsetHeight`）并在 presentation
+  命令到达时刷新，避免旧 backing buffer 在尺寸变化中短暂放大并裁成四分之一。
+- 主页面的 A 容器在悬浮态脱离文档流但保留稳定的 148×148 渲染盒，释放页面布局空间；
+  回场时恢复文档流，再执行 A 尺寸落地动画。
+- 主窗口首次展示和每次回焦都先保持 A 槽的宽高为 0（桌宠与其布局空间均不可见），
+  再同步打开槽位并播放 `teleport-in`，让正文先随槽位过渡下推、桌宠随后弹出；失焦时
+  先播放 `floating-start`，结束后进入 `layout-closing` 再收起槽位。Electron 的首个
+  `ready-to-show`/`show` 瞬时未聚焦事件由生命周期门控，避免把首次绘制误判为失焦而触发
+  悬浮迁移；renderer reload 重放当前 phase，不用 synthetic `steady` 打断入场/离场动画。
+- `petInlineGeometry` 只负责记录回场坐标；`PetPresentationChange` 负责阶段和动画时长。
+  该简化方案没有 `desktopCapturer`/screen-recording 权限依赖，悬浮窗口始终不抢焦点。
+
 ### 4. 真实 RUC 能力矩阵（以 RUCGO 为事实来源）
 
 本轮调研通过本地 SSH 只读浅克隆完成；RUCGO `main` 当前核对的 commit 是
-`b41e2d552c6a9473fccd1efa0023d003bbdc3174`。以下结论只描述该 commit 中实际存在
+`1a107ec1a8c0de63e88fd705f3d9220f724659cd`。以下结论只描述该 commit 中实际存在
 的代码，不把 README 模板或推测接口算成能力。
 
 RUCGO 是 Flutter/Dart 应用，不是可直接安装到 Node 的 SDK；仓库根部未发现
@@ -390,8 +455,8 @@ packages/
   用 `screen.getCursorScreenPoint()` 和窗口 bounds 更新桌宠位置。
 - 形状外开启 `setIgnoreMouseEvents(true, { forward: true })`，形状内恢复接收；
   renderer 只报告共享的 `hitTest` 结果，不能让 CSS 盒子决定可点击区域。
-- 默认尺寸只承诺 96/224 logical px；DPR 1/2 下限制 canvas 面积、帧率和最大 DPR，
-  静止时停 RAF，避免常驻 ray-march 耗电。
+- 生产呈现固定为 A=148/ B=224 logical px（96 仅是原型比例参考）；DPR 1/2 下限制
+  canvas 面积、帧率和最大 DPR，静止时停 RAF，避免常驻 ray-march 耗电。
 
 #### 窄 preload API（目标形状）
 
@@ -641,8 +706,8 @@ app 使用同一形状。A 的 items/fragments/extract、projects、五页取数
 #### Electron/桌宠
 
 - [~] 主窗与 pet 双入口只启动一个 server；第二次启动复用既有实例（代码与 bundle 已
-      自检，真实 Electron binary smoke 待目标环境）；
-- [~] 默认 96 logical px（224 可显式放大）、DPR 1/2 下无不透明矩形、黑边或明显 alpha
+      自检，本机 Electron 44 可启动，第二实例/目标平台视觉 smoke 待验）；
+- [~] 主页面 A=148、悬浮 B=224 logical px，DPR 1/2 下无不透明矩形、黑边或明显 alpha
       halo（shader/alpha 代码已检视，平台截图待验）；
 - [x] 六个协议状态可由固定事件独立驱动，且与 renderer 视觉映射一致；
 - [x] idle/focus 使用限帧 ambient RAF；reduced-motion 禁用呼吸/弹跳；
@@ -726,7 +791,7 @@ app 使用同一形状。A 的 items/fragments/extract、projects、五页取数
 
 - 产品母设计：`docs/atlas/design/2026-09-05-product-form-and-main-window.md`；
 - 旧骨架和进程边界：`docs/atlas/design/2026-09-05-starter-skeleton-and-stack.md`；
-- RUCGO 实证版本：[commit b41e2d5](https://github.com/HuanCheng65/rucgo/tree/b41e2d552c6a9473fccd1efa0023d003bbdc3174)；
+- RUCGO 实证版本：[commit 1a107ec](https://github.com/HuanCheng65/rucgo/tree/1a107ec1a8c0de63e88fd705f3d9220f724659cd)；
 - Electron 窗口/透明、屏幕与捕获能力：
   [BrowserWindow](https://www.electronjs.org/docs/latest/api/browser-window)、
   [screen](https://www.electronjs.org/docs/latest/api/screen)、

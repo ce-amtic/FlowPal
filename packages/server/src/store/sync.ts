@@ -1,13 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type {
-  Ctx, ExternalKind, ExternalRecord, ExternalSource, SourceCapability,
+  Ctx, ExternalKind, ExternalRecord, ExternalSource, RucExternalSource, SourceCapability,
   SyncRun, SyncRunStatus, SyncStatus,
 } from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
 import { newId } from './db.ts'
 
 export function startSyncRun(
-  db: DatabaseSync, ctx: Ctx, source: ExternalSource | null,
+  db: DatabaseSync, ctx: Ctx, source: RucExternalSource | null,
 ): { run: SyncRun; reused: boolean } {
   const existing = db.prepare(
     `SELECT * FROM sync_runs WHERE status = 'running' ORDER BY started_at DESC LIMIT 1`,

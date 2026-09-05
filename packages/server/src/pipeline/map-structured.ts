@@ -13,8 +13,12 @@ import { externalRecordToExtractedItem } from '../sync/structured-import.ts'
  * sources keep failing loudly until their own adapter is added.
  */
 export function mapStructured(_ctx: Ctx, fragment: Fragment): ExtractedItem[] {
-  if (fragment.rawType !== 'structured') {
-    throw new Error(`mapStructured 只接结构化碎片，收到 ${fragment.rawType}`)
+  // A local .ics import keeps raw_type='file' for provenance, but its
+  // preprocessor stores the same validated external-records payload used by
+  // RUC structured fragments.  Do not force the caller to lose the original
+  // file kind merely to reuse this deterministic mapper.
+  if (fragment.rawType !== 'structured' && fragment.rawType !== 'file') {
+    throw new Error(`mapStructured 只接结构化或 ICS 文件碎片，收到 ${fragment.rawType}`)
   }
   if (fragment.rawText === null) {
     throw new Error(`结构化碎片 ${fragment.id} 没有 raw_text`)
