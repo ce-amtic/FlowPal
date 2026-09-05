@@ -10,6 +10,8 @@
   },
   "scripts": {
     "check:fixtures": "tsx scripts/check-fixtures.ts",
+    "check:sync": "tsx scripts/check-sync.ts",
+    "sync:once": "tsx scripts/sync-once.ts",
     "bench:now": "tsx scripts/bench-now.ts",
     "demo:reset": "tsx scripts/demo-reset.ts"
   },
@@ -18,10 +20,14 @@
     "@flowpal/shared": "workspace:*",
     "@hono/node-server": "^1.13.7",
     "hono": "^4.6.14",
+    "imapflow": "^1.7.8",
+    "mailparser": "^3.9.20",
     "openai": "^4.77.0",
+    "tough-cookie": "^5.1.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^24.0.0"
   }
 }

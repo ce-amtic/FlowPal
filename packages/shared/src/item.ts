@@ -14,8 +14,12 @@ export type DatePrecision = z.infer<typeof DatePrecision>
 export const ItemStatus = z.enum(['active', 'done', 'dropped', 'needs_confirm'])
 export type ItemStatus = z.infer<typeof ItemStatus>
 
+/**
+ * 碎片从哪个入口进来的。前六个是用户的一个动作，后三个来自他明确授权的数据源
+ * （门户的日程中心与通知公告、学校邮箱），由 packages/server/src/sync/ 写入。
+ */
 export const FragmentSource = z.enum([
-  'paste', 'hotkey', 'drop', 'share', 'screenshot', 'email', 'calendar', 'timetable',
+  'paste', 'hotkey', 'drop', 'share', 'screenshot', 'email', 'notice', 'calendar', 'timetable',
 ])
 export type FragmentSource = z.infer<typeof FragmentSource>
 

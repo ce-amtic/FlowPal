@@ -11,7 +11,7 @@ import type { ServerConfig } from '../config.ts'
 import { newId } from '../store/db.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
 import {
-  addItemCitations, addItemSource, getItem, insertItem, itemHistory, listItems, updateItemFields,
+  getItem, itemHistory, listItems, updateItemFields,
 } from '../store/items.ts'
 import type { ItemWithSources } from '../store/items.ts'
 import {
@@ -25,6 +25,8 @@ import { clearNowCache, getNowCache, setNowCache } from '../store/now-cache.ts'
 import { getSetting, setSetting } from '../store/settings.ts'
 import { extract } from '../pipeline/extract.ts'
 import { mapStructured } from '../pipeline/map-structured.ts'
+import { applyMapped } from '../sync/apply.ts'
+import { markSignedIn, readSyncStatus, RucCookies, runSync } from '../sync/index.ts'
 import { buildContext } from '../context/build.ts'
 import { callJson } from '../llm/client.ts'
 import { runAgentLoop, type AgentLoopEvent } from '../agent/loop.ts'
@@ -47,6 +49,10 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
 
   /** 唯一允许读系统时钟的地方：请求入口。往下一路传 ctx.now。 */
   const ctxOf = () => createCtx(calendar, nowInShanghai())
+
+  /** 学校系统的登录态。落在 dataDir 里，冷启动不用重新登录。 */
+  const cookies = RucCookies.open(join(config.dataDir, 'ruc-cookies.json'))
+  let syncing = false
 
   // ── 跨窗口广播 ──────────────────────────────────────────────────────
   // 任何写操作后广播一条粗粒度的「变了」。事件不携带内容：实体在库里另有真相，
@@ -127,6 +133,20 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     device: z.string().optional(),
   })
 
+  /** 浏览器窗口里那次真人登录留下的 Cookie。形状照 Electron 的 cookies API。 */
+  const SessionBody = z.object({
+    cookies: z.array(z.object({
+      name: z.string(),
+      value: z.string(),
+      domain: z.string(),
+      path: z.string(),
+      secure: z.boolean(),
+      httpOnly: z.boolean(),
+      /** Unix 秒。会话 Cookie 没有这一项 */
+      expirationDate: z.number().optional(),
+    })),
+  })
+
   app.get('/api/fragments', (c) => c.json({ fragments: listFragments(db) }))
 
   app.get('/api/fragments/:id', (c) => {
@@ -154,18 +174,13 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     let items: ItemWithSources[] = []
     try {
       if (fragment.rawType === 'structured') {
-        // 结构化来源不经模型，也不走循环；B 的同步路径另有 upsertByExternalId。
-        const candidates = mapStructured(ctx, fragment)
-        const itemIds = candidates.map((e) => {
-          const id = insertItem(db, ctx, e)
-          addItemSource(db, ctx, id, fragment.id)
-          addItemCitations(db, id, fragment.id, e)
-          return id
-        })
-        items = itemIds.map((id) => getItem(db, id) as ItemWithSources)
+        // 结构化来源不经模型，也不走循环：判定靠 external_id 这个主键。定时同步
+        // 走的是同一段（applyMapped），所以「连拉两次不新增条目」只有一处要成立。
+        const applied = applyMapped(db, ctx, fragment.id, mapStructured(ctx, fragment))
+        items = applied.itemIds.map((id) => getItem(db, id) as ItemWithSources)
         const counts = {
-          created: itemIds.length,
-          updated: 0,
+          created: applied.created,
+          updated: applied.updated,
           dropped: 0,
           needsConfirm: items.filter((i) => i.status === 'needs_confirm').length,
         }
@@ -397,6 +412,56 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     return c.json({
       settings: Object.fromEntries(SETTING_KEYS.map((k) => [k, getSetting(db, k)])),
     })
+  })
+
+  // ── 和外部来源同步 ──────────────────────────────────────────────────
+  /*
+   * 登录不在这里发生，也不可能在这里发生：CAS 的登录页带验证码、短信码和一段前端
+   * 加密的密码，无头重放那套表单是在猜一个会变的东西，猜错的代价是真实账号被锁。
+   * 所以密码从不进入本程序——用户在 desktop 开的一个真浏览器窗口里登录一次，那次
+   * 登录留下的 Cookie POST 到下面这个口，之后取数全由 server 自己发出。
+   *
+   * server 因此仍然不知道 Electron 存在：它只认一批 Cookie。
+   */
+  app.get('/api/sync', (c) => c.json(readSyncStatus(db, !cookies.isEmpty)))
+
+  app.post('/api/sync/session', async (c) => {
+    const ctx = ctxOf()
+    const body = SessionBody.safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '登录态参数不对', issues: body.error.issues }, 400)
+
+    const saved = cookies.importFromBrowser(body.data.cookies)
+    if (saved === 0) return c.json({ error: '这次登录没有带回任何 Cookie' }, 400)
+    markSignedIn(db, ctx)
+    broadcastChanged(ctx.now)
+    return c.json({ saved, status: readSyncStatus(db, !cookies.isEmpty) })
+  })
+
+  app.delete('/api/sync/session', (c) => {
+    cookies.clear()
+    broadcastChanged(ctxOf().now)
+    return c.json({ status: readSyncStatus(db, false) })
+  })
+
+  /**
+   * 同步一次。启动、六小时的定时、设置页的按钮，三个触发点都打这一个口。
+   *
+   * **同一时刻只跑一轮。** 三个触发点会撞上——开机时定时器和启动那一次几乎同时
+   * 到——两轮并行地往同一批 external_id 上写，得到的是一堆本不该有的 item_history。
+   * 撞上时回 409，调用方不重试：正在跑的那一轮会把活干完。
+   */
+  app.post('/api/sync', async (c) => {
+    if (syncing) return c.json({ error: '正在同步' }, 409)
+    syncing = true
+    const ctx = ctxOf()
+    try {
+      const result = await runSync({
+        db, ctx, config, cookies, onChanged: () => broadcastChanged(ctx.now),
+      })
+      return c.json({ ...result, status: readSyncStatus(db, !cookies.isEmpty) })
+    } finally {
+      syncing = false
+    }
   })
 
   /** 想法页：倒序的流，既没有时间也不属于项目。 */

@@ -55,6 +55,39 @@ export const ModelConfig = z.object({
 })
 export type ModelConfig = z.infer<typeof ModelConfig>
 
+/**
+ * 学校邮箱。人大的邮箱是网易企业邮箱的一份部署，IMAP 在 `imap.ruc.edu.cn:993`。
+ *
+ * **password 是邮箱设置里那串「客户端授权码」，不是登录密码。** 网易那套默认不许
+ * 拿登录密码走 IMAP，填错了只会得到一句认证失败，看不出是这个原因。
+ *
+ * 这是全程序唯一存密码的地方，因为 IMAP 没有别的凭据形式。门户那条路不存密码，
+ * 见 sync/cookies.ts。不配这一段则整条邮件来源不跑，设置页显示「未配置」。
+ */
+export const MailConfig = z.object({
+  host: z.string().default('imap.ruc.edu.cn'),
+  port: z.number().int().default(993),
+  user: z.string(),
+  password: z.string(),
+  /** 一次同步至多读几封。读邮件要过模型，配额就是花销的上限 */
+  perRun: z.number().int().nonnegative().default(3),
+})
+export type MailConfig = z.infer<typeof MailConfig>
+
+export const SyncConfig = z.object({
+  /**
+   * 一次同步至多把几条通知公告送进 agent 循环。
+   *
+   * 通知是散文，日期藏在句子里，只有模型算得出来，所以这一路要花钱。门户上通知
+   * 每天几十条，没有配额的话，第一个早上就能把额度烧掉一大半，而那时没有人看着。
+   * 设成 0 就是不处理通知，课表与校历照旧。
+   */
+  noticesPerRun: z.number().int().nonnegative().default(3),
+  /** 自动同步的间隔（分钟）。课表与考试变化很慢，六小时绰绰有余 */
+  intervalMinutes: z.number().int().positive().default(360),
+})
+export type SyncConfig = z.infer<typeof SyncConfig>
+
 export const ServerConfig = z.object({
   /** 默认只监听本机。局域网监听（手机端）是显式开关，开了就要 token。 */
   host: z.string().default('127.0.0.1'),
@@ -72,7 +105,8 @@ export const ServerConfig = z.object({
     /** 图片不走 OCR，直接交视觉模型 */
     vision: ModelConfig,
   }),
-  ruc: z.object({ studentId: z.string(), password: z.string() }).nullable().default(null),
+  sync: SyncConfig.default({ noticesPerRun: 3, intervalMinutes: 360 }),
+  mail: MailConfig.nullable().default(null),
 })
 export type ServerConfig = z.infer<typeof ServerConfig>
 

@@ -16,7 +16,7 @@
 - **003** [[003-product-form-open|产品形态未定：陪伴与规划如何融合、陪伴形象是什么、主界面长什么样]] — 2026-09-04 — answered by 009; tags: bootstrap, product; cited by 2
 - **004** [[004-multi-device-sync-open|多设备同步走什么机制]] — 2026-09-04 — answered by 006; tags: bootstrap, collection; cited by 1
 
-## Decisions (13)
+## Decisions (14)
 
 - **001** [[001-fragment-immutable-item-derived-with-citations|原始碎片不可变永不删除，条目派生可改，每个字段带原文引用]] — 2026-09-04 — tags: bootstrap, collection; cited by 4
 - **002** [[002-llm-tone-present-not-judging|LLM 回应语气：在场而不评判，说中具体细节，不责备不催不谈意志力]] — 2026-09-04 — tags: bootstrap, companion; cited by 3
@@ -31,3 +31,4 @@
 - **017** [[017-agent-output-is-receipt|Agent 的输出是回执不是结果；进行中播对象，不播步骤]] — 2026-09-05 — tags: product, companion
 - **020** [[020-avatar-is-decoration-in-main-window|形象在主窗口是装饰，不承担任何功能入口]] — 2026-09-05 — tags: companion, product
 - **021** [[021-focus-end-buttons-target-the-item|专注结束的两个按钮是关于那件事，不是关于这段时间]] — 2026-09-05 — tags: product, architecture
+- **022** [[022-school-auth-is-a-real-login-window|学校系统的鉴权是一次真人登录加 Cookie 搬运，程序不碰密码]] — 2026-09-06 — tags: collection, architecture

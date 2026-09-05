@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS fragments (
   id            TEXT PRIMARY KEY,
   created_at    TEXT NOT NULL,               -- ISO8601 带 +08:00
   device        TEXT NOT NULL,
-  source        TEXT NOT NULL,               -- paste|hotkey|drop|share|screenshot|email|calendar|timetable
+  source        TEXT NOT NULL,               -- paste|hotkey|drop|share|screenshot|email|notice|calendar|timetable
   raw_type      TEXT NOT NULL,               -- text|image|audio|file|structured
   raw_text      TEXT,                        -- 原文 / 转写文本 / 结构化来源的原始 JSON
   raw_blob_path TEXT                         -- 图片、文件落盘的相对路径
