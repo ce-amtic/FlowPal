@@ -74,7 +74,7 @@ export function NowPage() {
         <motion.p layout="position" className="now-reason">{candidate.reason}</motion.p>
 
         <motion.div layout="position" className="now-actions">
-          <button className="primary" onClick={() => navigate('/focus')}>开始</button>
+          <button className="primary" onClick={() => navigate(`/focus?item=${encodeURIComponent(candidate.itemId)}`)}>开始</button>
           {hasSmaller && (
             <button className="quiet" onClick={() => setStepIndex((i) => i + 1)}>
               更小的一步

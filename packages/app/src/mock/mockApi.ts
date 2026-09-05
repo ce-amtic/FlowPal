@@ -1,5 +1,6 @@
 import type { Api } from '../api.ts'
 import { AGENDA, FRAGMENTS, HISTORY, ITEMS, NOW, PROJECTS, PROJECT_CARDS, RECENT } from './data.ts'
+import type { FocusSession } from '@flowpal/shared'
 
 /**
  * 样例模式下的接口实现。它和真实实现共用同一个 Api 类型——语义层的形状一变，
@@ -37,7 +38,11 @@ export const mockApi: Api = {
 
   listRecent: () => delay({ recent: RECENT }),
 
+  getRecent: () => delay({ recent: RECENT }),
+
   getAgenda: () => delay(AGENDA),
+
+  getAgendaRange: () => delay(AGENDA),
 
   listProjects: () => delay({
     projects: PROJECT_CARDS,
@@ -60,6 +65,33 @@ export const mockApi: Api = {
   listThoughts: () => delay({
     thoughts: ITEMS.filter((i) => i.type === 'thought' && i.status === 'active'),
   }),
+
+  listFocusSessions: () => delay({ sessions: [] as FocusSession[] }),
+
+  startFocus: () => Promise.reject(new Error('样例模式不写入。要试专注请关掉它。')),
+
+  endFocus: () => Promise.reject(new Error('样例模式不写入。要试专注请关掉它。')),
+
+  getSettings: () => delay({
+    settings: {
+      revision: 0,
+      updatedAt: null,
+      text: { baseUrl: '', model: '', apiKeyConfigured: false },
+      vision: { baseUrl: '', model: '', apiKeyConfigured: false },
+      ruc: { authorized: false, role: null, lastSessionAt: null },
+      chronotype: { workdayWakeTime: null, freeDayWakeTime: null },
+      sync: { enabled: false, intervalMinutes: 360 },
+    },
+    sync: { runningRunId: null, nextRunAt: null, capabilities: [], recentRuns: [] },
+  }),
+
+  saveSettings: () => Promise.reject(new Error('样例模式不写入。要试设置请关掉它。')),
+
+  getSyncStatus: () => delay({
+    status: { runningRunId: null, nextRunAt: null, capabilities: [], recentRuns: [] },
+  }),
+
+  runSync: () => Promise.reject(new Error('样例模式不写入。要试同步请关掉它。')),
 
   serverUrl: '',
 }

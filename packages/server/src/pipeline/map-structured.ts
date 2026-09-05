@@ -1,4 +1,6 @@
 import type { Ctx, ExtractedItem, Fragment } from '@flowpal/shared'
+import { ExternalRecordSchema } from '../sync/types.ts'
+import { externalRecordToExtractedItem } from '../sync/structured-import.ts'
 
 /**
  * 结构化碎片 → 条目候选，不经模型。
@@ -7,7 +9,8 @@ import type { Ctx, ExtractedItem, Fragment } from '@flowpal/shared'
  * 碎片照样落库（raw_type='structured'，原始 JSON 存在 raw_text 里），
  * 但到条目走这条确定性的路。
  *
- * 待实现：教务系统接入落地后，按拉回来的结构补齐各来源的映射。
+ * RUC portal/graduate structured batches are handled below. Other structured
+ * sources keep failing loudly until their own adapter is added.
  */
 export function mapStructured(_ctx: Ctx, fragment: Fragment): ExtractedItem[] {
   if (fragment.rawType !== 'structured') {
@@ -17,12 +20,30 @@ export function mapStructured(_ctx: Ctx, fragment: Fragment): ExtractedItem[] {
     throw new Error(`结构化碎片 ${fragment.id} 没有 raw_text`)
   }
 
-  const payload = JSON.parse(fragment.rawText) as { kind?: string }
-  switch (payload.kind) {
-    default:
-      throw new Error(
-        `未知的结构化来源 kind=${payload.kind}；映射还没写。` +
-        `课表 / 考试 / ICS 的映射随教务接入一起补。`,
-      )
+  let payload: unknown
+  try {
+    payload = JSON.parse(fragment.rawText) as unknown
+  } catch (error) {
+    throw new Error(`结构化碎片 ${fragment.id} 的 raw_text 不是 JSON：${String(error)}`)
   }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`结构化碎片 ${fragment.id} 的 payload 不是对象`)
+  }
+  const candidate = payload as { schema?: unknown; records?: unknown }
+  if (candidate.schema !== 'flowpal.ruc.external-records.v1') {
+    throw new Error(
+      `未知的结构化来源 schema=${String(candidate.schema)}；` +
+      `课表 / 日程 / 考试的 mapper 尚未覆盖该形状。`,
+    )
+  }
+  if (!Array.isArray(candidate.records)) {
+    throw new Error(`结构化碎片 ${fragment.id} 的 records 不是数组`)
+  }
+  return candidate.records.map((record, index) => {
+    const parsed = ExternalRecordSchema.safeParse(record)
+    if (!parsed.success) {
+      throw new Error(`结构化碎片 ${fragment.id} records[${index}] 不符合 ExternalRecord：${parsed.error.message}`)
+    }
+    return externalRecordToExtractedItem(parsed.data, fragment.rawText!)
+  })
 }

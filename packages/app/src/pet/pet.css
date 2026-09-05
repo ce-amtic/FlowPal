@@ -1,0 +1,75 @@
+@import '../tokens/tokens.css';
+
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#pet-root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  color: var(--fg);
+}
+
+#pet {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+  outline-offset: -4px;
+}
+
+#pet:active {
+  cursor: grabbing;
+}
+
+#pet[data-fallback] {
+  opacity: 0;
+}
+
+.pet-fallback {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: min(260px, calc(100% - 24px));
+  transform: translate(-50%, -50%);
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--surface);
+  color: var(--fg-dim);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.pet-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #pet {
+    cursor: default;
+  }
+}

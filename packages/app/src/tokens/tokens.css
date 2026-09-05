@@ -35,9 +35,13 @@
   --accent: #b4622f;
   --accent-soft: rgba(180, 98, 47, 0.14);
   --accent-line: rgba(180, 98, 47, 0.4);
+  --on-accent: #fffaf6;
 
   --danger: #c0392b;
   --danger-soft: rgba(192, 57, 43, 0.12);
+  --danger-strong: #b24132;
+  --success: #55734a;
+  --success-soft: #6b9b59;
 
   /* ── 圆角：两个值 ─────────────────────────────────────── */
   --radius-box: 12px;           /* 卡片、输入框、浮层 */
@@ -102,9 +106,13 @@
     --accent: #e08b56;
     --accent-soft: rgba(224, 139, 86, 0.16);
     --accent-line: rgba(224, 139, 86, 0.45);
+    --on-accent: #211b17;
 
     --danger: #e57365;
     --danger-soft: rgba(229, 115, 101, 0.14);
+    --danger-strong: #f09a8c;
+    --success: #a7c99a;
+    --success-soft: #8dbb7e;
   }
 }
 

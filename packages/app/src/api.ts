@@ -1,23 +1,19 @@
-import type { Citation, Item, Project, Run } from '@flowpal/shared'
+import type {
+  Citation,
+  FocusResponse,
+  FocusSession,
+  Item,
+  Project,
+  Run,
+  SettingsPatch,
+  SettingsPublic,
+  SyncRun,
+  SyncStatus,
+} from '@flowpal/shared'
 
 export type { Citation, Item, Project, Run }
 import { mockApi } from './mock/mockApi.ts'
 
-/**
- * 主窗口消费的 HTTP 接口。
- *
- * 形状由语义层冻结，这里只是照抄一份类型——改形状要三方一起改，不是这个文件
- * 单方面说了算。五页各自一个取数接口而不是一个通用查询加前端分组：同一条东西
- * 在不同页里的形状不同（日程按天分组、项目要带「多久没动」、最近要带那次投放的
- * 回执），把分组放在前端等于把同一份逻辑写五遍。
- */
-
-/**
- * 一条字段变更。改期那几行是处境信号，所以历史要看得见。
- *
- * 这一处是下划线命名：服务端把库里的行原样返出来，没有转换。跟着它写，
- * 不在前端悄悄改名——改名会让人以为两边是同一套命名，然后在别处踩空。
- */
 export type ItemHistoryRow = {
   id: string
   item_id: string
@@ -44,43 +40,32 @@ export type Fragment = {
   rawBlobPath: string | null
 }
 
-/** 项目卡：一次取数就够画一张卡，不用为每个项目再打一次接口 */
 export type ProjectCard = {
   project: Project
   unfinished: number
   done: number
-  /** 接下来最近的两件 */
   next: { id: string; type: string; title: string; at: string }[]
-  /** 用户说过的话 */
   said: string[]
-  /** 多久没动。它测的是回避而非进展，是这一页的核心 */
   idleDays: number | null
   lastActivityAt: string | null
 }
 
-/**
- * 「此刻」。语义层已冻形状、第 7 步填实现，所以这一页现在能照着写，之后零改动接上。
- * primary 为 null 表示库里没有可推的：不调模型，页面显示投放入口。
- */
 export type NowPick = {
   itemId: string
   title: string
-  /** 为什么是它。必须落在具体的处境上 */
   reason: string
-  /** 第一步；其后是更小的切口。「更小的一步」在这里面往后走 */
   steps: string[]
 }
 
 export type NowView = {
   primary: NowPick | null
   alternates: NowPick[]
-  /** 模型的一句判断，必须引用一条给它的事实 */
   energy: string | null
-  /** 这次输出用了哪些材料 */
   basis: string[]
 }
 
-/** 一次投放：碎片 + 它的回执 + 抽出或更新到的条目。零条与失败都是常态 */
+export type NowResponse = NowView
+
 export type RecentEntry = {
   fragment: Fragment
   run: Run | null
@@ -96,8 +81,21 @@ export type AgendaView = {
   from: string
   to: string
   days: { day: string; items: AgendaEntry[] }[]
-  /** 重复项不占某一天，界面压成每天顶上的细带 */
   recurring: AgendaEntry[]
+}
+
+export type AgendaResponse = AgendaView
+
+export type FocusStartInput = {
+  plannedMinutes: number
+  itemId?: string | null
+  projectId?: string | null
+  idempotencyKey?: string | null
+}
+
+export type FocusEndInput = {
+  outcome: 'done' | 'continue' | 'early_end'
+  actualMinutes?: number | null
 }
 
 export type Api = {
@@ -110,26 +108,59 @@ export type Api = {
     rawType: string
     rawText?: string
     rawBlobPath?: string
-  }) => Promise<{ fragment: Fragment; run: Run; items: ItemWithSources[] }>
+  }) => Promise<{ fragment: Fragment; run: Run; items: ItemWithSources[]; plans?: unknown[] }>
   getNow: () => Promise<NowView>
   listRecent: () => Promise<{ recent: RecentEntry[] }>
+  getRecent: () => Promise<{ recent: RecentEntry[] }>
   getAgenda: () => Promise<AgendaView>
+  getAgendaRange: (from?: string, to?: string) => Promise<AgendaView>
   listProjects: () => Promise<{ projects: ProjectCard[]; unclassified: ItemWithSources[] }>
   getProject: (id: string) => Promise<{ project: Project; items: ItemWithSources[] }>
   listConfirmations: () => Promise<{ items: ItemWithSources[]; count: number }>
   listThoughts: () => Promise<{ thoughts: ItemWithSources[] }>
+  listFocusSessions: () => Promise<{ sessions: FocusSession[] }>
+  startFocus: (input: FocusStartInput) => Promise<{ session: FocusSession }>
+  endFocus: (id: string, input: FocusEndInput) => Promise<FocusResponse>
+  getSettings: () => Promise<{ settings: SettingsPublic; sync: SyncStatus }>
+  saveSettings: (patch: SettingsPatch) => Promise<{ settings: SettingsPublic; sync: SyncStatus }>
+  getSyncStatus: () => Promise<{ status: SyncStatus }>
+  runSync: (
+    source?: 'ruc.portal' | 'ruc.graduate' | null,
+    mode?: 'online' | 'fixture',
+    options?: { payload?: unknown; term?: { code: string; name: string } },
+  ) => Promise<{ run?: SyncRun; runId?: string; imported?: number }>
   serverUrl: string
 }
 
 const BASE = import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:5123'
+
+export class ApiError extends Error {
+  readonly status: number
+  readonly body: unknown
+
+  constructor(method: string, path: string, status: number, body: unknown) {
+    const detail = body && typeof body === 'object'
+      ? ((body as Record<string, unknown>).message ?? (body as Record<string, unknown>).error)
+      : undefined
+    super(`${method} ${path} → ${status}${typeof detail === 'string' ? ` ${detail}` : ''}`)
+    this.name = 'ApiError'
+    this.status = status
+    this.body = body
+  }
+}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: { 'content-type': 'application/json', ...init?.headers },
   })
-  if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} → ${res.status} ${await res.text()}`)
-  return res.json() as Promise<T>
+  const text = await res.text()
+  let body: unknown = undefined
+  if (text) {
+    try { body = JSON.parse(text) as unknown } catch { body = text }
+  }
+  if (!res.ok) throw new ApiError(init?.method ?? 'GET', path, res.status, body)
+  return body as T
 }
 
 const realApi: Api = {
@@ -140,25 +171,28 @@ const realApi: Api = {
   throwIn: (body) => call('/api/fragments', { method: 'POST', body: JSON.stringify(body) }),
   getNow: () => call('/api/now'),
   listRecent: () => call('/api/recent'),
+  getRecent: () => call('/api/recent'),
   getAgenda: () => call('/api/agenda'),
+  getAgendaRange: (from, to) => call(`/api/agenda${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) })}` : ''}`),
   listProjects: () => call('/api/projects'),
   getProject: (id) => call(`/api/projects/${id}`),
   listConfirmations: () => call('/api/confirmations'),
   listThoughts: () => call('/api/thoughts'),
+  listFocusSessions: () => call('/api/focus'),
+  startFocus: (input) => call('/api/focus', { method: 'POST', body: JSON.stringify(input) }),
+  endFocus: (id, input) => call(`/api/focus/${id}/end`, { method: 'POST', body: JSON.stringify(input) }),
+  getSettings: () => call('/api/settings'),
+  saveSettings: (patch) => call('/api/settings', { method: 'PUT', body: JSON.stringify(patch) }),
+  getSyncStatus: () => call('/api/sync/status'),
+  runSync: (source = null, mode = 'online', options = {}) => call('/api/sync/run', {
+    method: 'POST', body: JSON.stringify({ source, mode, ...options }),
+  }),
   serverUrl: BASE,
 }
 
-/**
- * 样例数据模式。默认关闭，靠 `pnpm dev:mock` 显式打开。
- *
- * 打开时标题栏上有一个拿不掉的标记——最怕的失败是拿着样例数据演了却不知道，
- * 所以这件事必须是看得见的，而不是藏在一个环境变量里。
- */
 export const usingMock = import.meta.env.VITE_MOCK === '1'
-
 export const api: Api = usingMock ? mockApi : realApi
 
-/** 各页与角标的缓存键。SSE 广播「变了」时整棵失效。 */
 export const queryKeys = {
   items: ['items'] as const,
   item: (id: string) => ['items', id] as const,

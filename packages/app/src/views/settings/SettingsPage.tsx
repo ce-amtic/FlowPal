@@ -1,4 +1,4 @@
-import { Empty } from '../../shell/State.tsx'
+import { SettingsView } from './SettingsView.tsx'
 
 /**
  * 设置：模型配置、教务凭据、作息两问、校历、同步状态与上次结果。
@@ -7,10 +7,5 @@ import { Empty } from '../../shell/State.tsx'
  * 这里只占住位置。
  */
 export function SettingsPage() {
-  return (
-    <>
-      <h1 className="page-title">设置</h1>
-      <Empty>还没有可配置的项。</Empty>
-    </>
-  )
+  return <SettingsView />
 }

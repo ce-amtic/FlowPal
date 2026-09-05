@@ -117,12 +117,24 @@ CREATE TABLE IF NOT EXISTS focus_sessions (
   planned_minutes INTEGER NOT NULL,
   actual_minutes  INTEGER,                  -- 提前结束或未填写时为 NULL
   ended_early     INTEGER NOT NULL DEFAULT 0,  -- 0|1
+  ended_at        TEXT,                      -- 结束时刻；running 会话为 NULL
+  outcome         TEXT,                      -- done|continue|early_end
+  client_key      TEXT,                      -- 客户端重试键，可为空
   item_id         TEXT REFERENCES items(id),
   project_id      TEXT REFERENCES projects(id),
   created_at      TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_focus_started ON focus_sessions(started_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_focus_client_key ON focus_sessions(client_key);
+
+-- 专注期间关联的碎片。碎片本身仍然不可变；这张表只记录归属关系。
+CREATE TABLE IF NOT EXISTS focus_session_fragments (
+  session_id  TEXT NOT NULL REFERENCES focus_sessions(id) ON DELETE CASCADE,
+  fragment_id TEXT NOT NULL REFERENCES fragments(id),
+  added_at    TEXT NOT NULL,
+  PRIMARY KEY (session_id, fragment_id)
+);
 
 -- 一次投放的一次处理。「最近」页的落点、气泡回执与 /api/runs/:id/events 的共同对象。
 -- counts 是 JSON：{created, updated, dropped, needsConfirm}。
@@ -163,5 +175,38 @@ CREATE TABLE IF NOT EXISTS now_cache (
   id         TEXT PRIMARY KEY CHECK (id = 'singleton'),
   payload    TEXT NOT NULL,
   created_at TEXT NOT NULL
+);
+
+-- 非 secret 设置。value_json 只存可公开的 draft；API key、密码、Cookie 不得写入。
+CREATE TABLE IF NOT EXISTS settings (
+  key         TEXT PRIMARY KEY,
+  value_json  TEXT NOT NULL,
+  revision    INTEGER NOT NULL DEFAULT 0,
+  updated_at  TEXT NOT NULL
+);
+
+-- 同步运行历史。原始响应仍作为 structured fragment 保存，不在这里重复存完整 payload。
+CREATE TABLE IF NOT EXISTS sync_runs (
+  id             TEXT PRIMARY KEY,
+  source         TEXT,                       -- ruc.portal|ruc.graduate|NULL=all
+  started_at     TEXT NOT NULL,
+  ended_at       TEXT,
+  status         TEXT NOT NULL,               -- running|succeeded|partial|failed|unsupported
+  imported_count INTEGER NOT NULL DEFAULT 0,
+  error_code     TEXT,
+  error_message  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_runs_started ON sync_runs(started_at);
+CREATE INDEX IF NOT EXISTS idx_sync_runs_running ON sync_runs(status);
+
+-- 来源记录索引：外部稳定键 → 最后一次观察到的条目。
+CREATE TABLE IF NOT EXISTS sync_records (
+  external_id TEXT PRIMARY KEY,
+  source      TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  item_id     TEXT REFERENCES items(id),
+  raw_json    TEXT
 );
 `

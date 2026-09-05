@@ -1,0 +1,59 @@
+[
+  {
+    "day": "2026-09-07 00:00:00",
+    "events": [
+      {
+        "beginTime": "2026-09-07 00:00:00",
+        "endTime": "2026-09-07 23:59:00",
+        "schedule": {
+          "id": 1786,
+          "title": "学期开始",
+          "location": "",
+          "cateGory": { "id": -5, "name": "校历" }
+        }
+      },
+      {
+        "beginTime": "2026-09-07 14:00:00",
+        "endTime": "2026-09-07 16:45:00",
+        "schedule": {
+          "id": 0,
+          "title": "计算机网络01",
+          "location": "立德807",
+          "cateGory": { "id": -2, "name": "课表" }
+        }
+      },
+      {
+        "beginTime": "2026-09-07 12:00:00",
+        "endTime": "2026-09-07 13:00:00",
+        "schedule": {
+          "id": 9001,
+          "title": "不在允许分类中的噪声",
+          "location": "",
+          "cateGory": { "id": 99, "name": "其他" }
+        }
+      }
+    ],
+    "isHoliday": false,
+    "teachingWeek": 1
+  },
+  {
+    "day": "2026-09-08 00:00:00",
+    "events": [
+      {
+        "beginTime": "2026-09-08 10:00:00",
+        "endTime": "2026-09-08 11:30:00",
+        "schedule": {
+          "id": 0,
+          "title": "科学技术哲学",
+          "location": "国学楼226",
+          "cateGory": { "id": -2, "name": "课表" }
+        }
+      }
+    ]
+  },
+  {
+    "day": "2026-09-09 00:00:00",
+    "isHoliday": false,
+    "teachingWeek": 1
+  }
+]

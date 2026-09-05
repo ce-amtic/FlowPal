@@ -1,0 +1,105 @@
+{
+  "code": 1,
+  "rwList": [
+    {
+      "BJDM": "C-A",
+      "KCDM": "M-A",
+      "KCMC": "数据结构",
+      "BJMC": "数据结构01",
+      "RKJS": "教师甲",
+      "KKDWMC": "信息学院",
+      "XQMC": "明德校区",
+      "SKFSMC": "讲授",
+      "PKSJDD": "1-8周 星期一[3-4节]明德101",
+      "SCSKRQ": "2026-09-07",
+      "XKBZ": ""
+    },
+    {
+      "BJDM": "C-B",
+      "KCDM": "M-B",
+      "KCMC": "学术英语",
+      "BJMC": "学术英语01",
+      "RKJS": "教师乙",
+      "KKDWMC": "外国语学院",
+      "XQMC": "明德校区",
+      "SKFSMC": "免修免考",
+      "PKSJDD": "",
+      "SCSKRQ": null,
+      "XKBZ": "免修"
+    },
+    {
+      "BJDM": "C-C",
+      "KCDM": "M-C",
+      "KCMC": "机器学习",
+      "BJMC": "机器学习01",
+      "RKJS": "教师丙",
+      "KKDWMC": "高瓴学院",
+      "XQMC": "明德校区",
+      "SKFSMC": "讲授",
+      "PKSJDD": "1,3,5,7周 星期二[1节]明德202",
+      "SCSKRQ": "2026-09-08",
+      "XKBZ": ""
+    }
+  ],
+  "jgList": [
+    {
+      "BJDM": "C-A",
+      "XQ": 1,
+      "KSJCDM": 3,
+      "JSJCDM": 3,
+      "JASMC": "明德101",
+      "JASDM": "R-A",
+      "ZCMC": "1-8周",
+      "ZCBH": "111111110000000000000000000000",
+      "JCFADM": "01"
+    },
+    {
+      "BJDM": "C-A",
+      "XQ": 1,
+      "KSJCDM": 4,
+      "JSJCDM": 4,
+      "JASMC": "明德101",
+      "JASDM": "R-A",
+      "ZCMC": "1-8周",
+      "ZCBH": "111111110000000000000000000000",
+      "JCFADM": "01"
+    },
+    {
+      "BJDM": "C-A",
+      "XQ": 1,
+      "KSJCDM": 7,
+      "JSJCDM": 7,
+      "JASMC": "明德101",
+      "JASDM": "R-A",
+      "ZCMC": "1-8周",
+      "ZCBH": "111111110000000000000000000000",
+      "JCFADM": "01"
+    },
+    {
+      "BJDM": "C-C",
+      "XQ": 2,
+      "KSJCDM": 1,
+      "JSJCDM": 1,
+      "JASMC": "明德202",
+      "JASDM": "R-C",
+      "ZCMC": "单双周",
+      "ZCBH": "101010100000000000000000000000",
+      "JCFADM": "01"
+    }
+  ],
+  "jcfaList": [
+    {
+      "DM": "01",
+      "skjcList": [
+        { "DM": 1, "MC": "第1节", "KSSJ": 800, "JSSJ": 845 },
+        { "DM": 2, "MC": "第2节", "KSSJ": 850, "JSSJ": 930 },
+        { "DM": 3, "MC": "第3节", "KSSJ": 1000, "JSSJ": 1045 },
+        { "DM": 4, "MC": "第4节", "KSSJ": 1046, "JSSJ": 1130 },
+        { "DM": 5, "MC": "第5节", "KSSJ": 1200, "JSSJ": 1245 },
+        { "DM": 6, "MC": "第6节", "KSSJ": 1246, "JSSJ": 1330 },
+        { "DM": 7, "MC": "第7节", "KSSJ": 1400, "JSSJ": 1445 },
+        { "DM": 8, "MC": "第8节", "KSSJ": 1446, "JSSJ": 1530 }
+      ]
+    }
+  ]
+}

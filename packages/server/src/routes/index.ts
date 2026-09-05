@@ -6,7 +6,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { Calendar, Run } from '@flowpal/shared'
-import { createCtx, nowInShanghai, FragmentSource, RawType, NowOutput, nowJsonSchema } from '@flowpal/shared'
+import {
+  createCtx, nowInShanghai, FragmentSource, RawType, NowOutput, nowJsonSchema,
+  EndFocusRequest, SettingsPatch, StartFocusRequest, SyncRunRequest,
+} from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
 import {
@@ -19,8 +22,22 @@ import {
 import {
   appendRunEvent, finishRun, getRun, listRunEvents, listRuns, startRun,
 } from '../store/runs.ts'
-import { insertFocusSession, listFocusSessions } from '../store/focus.ts'
+import {
+  endFocusSession, getFocusSession, insertFocusSession, listFocusApiSessions, listFocusSessions,
+  startFocusSessionResult,
+} from '../store/focus.ts'
 import { clearNowCache, getNowCache, setNowCache } from '../store/now-cache.ts'
+import {
+  getSettings, SecretSettingsUnsupported, SettingsRevisionConflict, updateSettings,
+} from '../store/settings.ts'
+import { finishSyncRun, getSyncStatus, startSyncRun } from '../store/sync.ts'
+import {
+  bundledFixtureRequest,
+  runRucSyncBatch,
+  type RucOnlineBroker,
+  type RucSyncRequest,
+} from '../sync/runner.ts'
+import { ExternalShapeError, UnsupportedExternalSourceError } from '../sync/types.ts'
 import { extract } from '../pipeline/extract.ts'
 import { mapStructured } from '../pipeline/map-structured.ts'
 import { buildContext } from '../context/build.ts'
@@ -31,7 +48,14 @@ import { runAgentLoop, type AgentLoopEvent } from '../agent/loop.ts'
  * 冻结的路由清单。界面和（将来的）手机端都只认这几个口，所以三个人可以各写各的，
  * 不用等对方。形状都在这里定死，改形状前先跟另外两方说。
  */
-export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: Calendar) {
+export type RouteDependencies = {
+  /** Electron-owned auth/session broker; omitted in browser/standalone mode. */
+  rucBroker?: RucOnlineBroker
+}
+
+export function createRoutes(
+  db: DatabaseSync, config: ServerConfig, calendar: Calendar, dependencies: RouteDependencies = {},
+) {
   const app = new Hono()
 
   app.use('/api/*', cors())
@@ -121,7 +145,7 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     source: FragmentSource,
     rawType: RawType,
     rawText: z.string().nullable().optional(),
-    rawBlobPath: z.string().nullable().optional(),
+    rawBlobPath: z.string().max(4096).refine((value) => !/[\u0000]/.test(value), '文件路径包含非法字符').nullable().optional(),
     device: z.string().optional(),
   })
 
@@ -148,6 +172,17 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     const fragment = insertFragment(db, ctx, parsed.data)
     const run = startRun(db, ctx, fragment.id)
     broadcastChanged(ctx.now)
+
+    // A path alone is not a parseable document.  Do not send an empty body to
+    // the text model and then report a misleading successful extraction.  The
+    // selected file remains an immutable fragment and the UI can offer a
+    // future file adapter (or ask the user to paste/screenshot it).
+    if (fragment.rawType === 'file') {
+      const message = '当前版本暂不支持直接解析此文件；原文已存。'
+      finishRun(db, ctx, run.id, 'failed', message, null)
+      broadcastChanged(ctx.now)
+      return c.json({ fragment, run: getRun(db, run.id), items: [], plans: [] })
+    }
 
     let items: ItemWithSources[] = []
     try {
@@ -201,6 +236,168 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
       rawText: body.rawText ?? null, rawBlobPath: body.rawBlobPath ?? null,
     }
     return c.json(await extract(config, ctx, fragment))
+  })
+
+  // ── 设置与同步 ─────────────────────────────────────────────────────
+  // Settings returns only the public draft. Secret actions are deliberately
+  // rejected here; Electron's safeStorage/WebView owns those credentials.
+  app.get('/api/settings', (c) => {
+    const settings = getSettings(db, config)
+    return c.json({
+      settings,
+      sync: getSyncStatus(db, config, settings.ruc.authorized, Boolean(dependencies.rucBroker)),
+    })
+  })
+
+  app.put('/api/settings', async (c) => {
+    let body: unknown
+    try { body = await c.req.json() } catch { return c.json({ error: '设置参数不是合法 JSON' }, 400) }
+    const parsed = SettingsPatch.safeParse(body)
+    if (!parsed.success) return c.json({ error: '设置参数不对', issues: parsed.error.issues }, 400)
+    try {
+      const ctx = ctxOf()
+      const settings = updateSettings(db, config, ctx, parsed.data)
+      broadcastChanged(ctx.now)
+      return c.json({
+        settings,
+        sync: getSyncStatus(db, config, settings.ruc.authorized, Boolean(dependencies.rucBroker)),
+      })
+    } catch (error) {
+      if (error instanceof SettingsRevisionConflict) {
+        return c.json({ error: 'settings_revision_conflict', settings: error.settings }, 409)
+      }
+      if (error instanceof SecretSettingsUnsupported) {
+        return c.json({
+          error: 'secret_settings_unsupported',
+          message: '模型密钥由桌面安全存储管理；这里只接受 keep，不接收密钥明文。',
+        }, 422)
+      }
+      throw error
+    }
+  })
+
+  app.get('/api/sync/status', (c) => {
+    const settings = getSettings(db, config)
+    return c.json({
+      status: getSyncStatus(db, config, settings.ruc.authorized, Boolean(dependencies.rucBroker)),
+    })
+  })
+
+  app.post('/api/sync/run', async (c) => {
+    let body: unknown = {}
+    try {
+      // An omitted body is intentionally shorthand for all configured
+      // sources, but malformed JSON must be a client error rather than
+      // silently turning into a full sync request.
+      const raw = await c.req.text()
+      if (raw.trim()) {
+        try { body = JSON.parse(raw) as unknown } catch {
+          return c.json({ error: '同步参数不是合法 JSON' }, 400)
+        }
+      }
+    } catch {
+      return c.json({ error: '同步参数不是合法 JSON' }, 400)
+    }
+    const parsed = SyncRunRequest.safeParse(body)
+    if (!parsed.success) return c.json({ error: '同步参数不对', issues: parsed.error.issues }, 400)
+    const sourceList = parsed.data.source
+      ? [parsed.data.source]
+      : ['ruc.portal', 'ruc.graduate'] as const
+    if (parsed.data.mode === 'fixture' && parsed.data.payload !== undefined && sourceList.length !== 1) {
+      return c.json({ error: 'fixture_payload_requires_one_source' }, 400)
+    }
+    // `source` is optional in the shared request (undefined when omitted and
+    // null when explicitly sent); a term only has meaning for the one
+    // graduate source, so never silently fan it out to the portal + graduate
+    // batch when the caller forgot to choose a source.
+    if (parsed.data.mode === 'fixture' && parsed.data.source == null && parsed.data.term) {
+      return c.json({ error: 'fixture_term_requires_one_source' }, 400)
+    }
+    const ctx = ctxOf()
+    const started = startSyncRun(db, ctx, parsed.data.source ?? null)
+    if (started.reused) {
+      return c.json({ run: started.run, reused: true })
+    }
+
+    try {
+      const requests: RucSyncRequest[] = sourceList.map((source) => {
+        if (parsed.data.mode === 'online') {
+          return {
+            mode: 'online',
+            source,
+            ...(parsed.data.term ? { term: parsed.data.term } : {}),
+          }
+        }
+        const bundled = bundledFixtureRequest(source)
+        return {
+          ...bundled,
+          ...(parsed.data.payload !== undefined ? { payload: parsed.data.payload } : {}),
+          ...(parsed.data.term ? { term: parsed.data.term } : {}),
+        }
+      })
+      const result = await runRucSyncBatch(db, ctx, requests, dependencies.rucBroker, {
+        projectIdFor: (record) => {
+          // A course is a durable project; ordinary portal calendar entries
+          // are events only.  The normalizer supplies courseCode/classCode in
+          // metadata, so repeated meetings converge on one project name.
+          if (record.source !== 'ruc.graduate' || record.kind !== 'timetable') return null
+          const courseCode = record.metadata?.courseCode
+          const projectName = typeof courseCode === 'string' && courseCode.trim()
+            ? `${courseCode.trim()} ${record.title}`
+            : record.title
+          return createProject(db, ctx, { name: projectName }).id
+        },
+      })
+      const run = finishSyncRun(
+        db, ctx, started.run.id, 'succeeded', result.records.length, null, null,
+      )
+      broadcastChanged(ctx.now)
+      return c.json({ run, reused: false, imported: result.records.length })
+    } catch (error) {
+      const unsupported = error instanceof UnsupportedExternalSourceError
+      const malformed = error instanceof ExternalShapeError
+      if (parsed.data.mode === 'fixture') {
+        // Parsing happens before the ingest transaction. Preserve the exact
+        // fixture response even when its shape is rejected, so a failed sync
+        // remains inspectable and can be retried without asking the user to
+        // upload the source again.
+        for (const source of sourceList) {
+          let payload: unknown = null
+          try {
+            payload = parsed.data.payload !== undefined
+              ? parsed.data.payload
+              : bundledFixtureRequest(source).payload
+          } catch {
+            // A packaged build may omit an optional bundled fixture. Keep the
+            // failed run terminal and preserve a diagnostic fragment rather
+            // than throwing from the error handler and leaving `running`.
+          }
+          insertFragment(db, ctx, {
+            source: source === 'ruc.portal' ? 'calendar' : 'timetable',
+            rawType: 'structured',
+            rawText: JSON.stringify({
+              schema: 'flowpal.ruc.external-records.v1.failed',
+              source,
+              observedAt: ctx.now,
+              response: payload,
+              error: malformed ? 'external_shape_error' : 'sync_failed',
+            }),
+            device: 'ruc-sync',
+          })
+        }
+      }
+      const run = finishSyncRun(
+        db, ctx, started.run.id, unsupported ? 'unsupported' : 'failed', 0,
+        unsupported ? 'sync_connector_not_configured' : malformed ? 'external_shape_error' : 'sync_failed',
+        unsupported
+          ? '在线 RUC 连接器尚未接入；请使用显式离线样例或完成桌面端授权'
+          : malformed
+            ? 'RUC 返回的数据格式不符合当前版本，未覆盖已有条目'
+            : 'RUC 同步失败；保留上一次成功结果',
+      )
+      broadcastChanged(ctx.now)
+      return c.json({ run, reused: false })
+    }
   })
 
   // ── 项目 ────────────────────────────────────────────────────────────
@@ -360,7 +557,7 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
   const FocusBody = z.object({
     startedAt: z.string(),
     plannedMinutes: z.number().int().positive(),
-    actualMinutes: z.number().int().positive().nullable().optional(),
+    actualMinutes: z.number().int().nonnegative().nullable().optional(),
     endedEarly: z.boolean().optional(),
     itemId: z.string().nullable().optional(),
     projectId: z.string().nullable().optional(),
@@ -377,6 +574,45 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     const session = insertFocusSession(db, ctx, parsed.data)
     broadcastChanged(ctx.now)
     return c.json({ session }, 201)
+  })
+
+  // Target /focus lifecycle. The legacy /api/focus-sessions endpoint above is
+  // kept for A's demo seed and callers that only need the historical list.
+  app.get('/api/focus', (c) => c.json({ sessions: listFocusApiSessions(db) }))
+
+  app.post('/api/focus', async (c) => {
+    let body: unknown
+    try { body = await c.req.json() } catch { return c.json({ error: '专注参数不是合法 JSON' }, 400) }
+    const parsed = StartFocusRequest.safeParse(body)
+    if (!parsed.success) return c.json({ error: '专注参数不对', issues: parsed.error.issues }, 400)
+    if (parsed.data.itemId && !getItem(db, parsed.data.itemId)) {
+      return c.json({ error: '条目不存在' }, 404)
+    }
+    if (parsed.data.projectId && !getProject(db, parsed.data.projectId)) {
+      return c.json({ error: '项目不存在' }, 404)
+    }
+    const ctx = ctxOf()
+    const started = startFocusSessionResult(db, ctx, parsed.data)
+    broadcastChanged(ctx.now)
+    return c.json(started.response, started.reused ? 200 : 201)
+  })
+
+  app.get('/api/focus/:id', (c) => {
+    const response = getFocusSession(db, c.req.param('id'), ctxOf().now)
+    if (!response) return c.json({ error: '专注时段不存在' }, 404)
+    return c.json(response)
+  })
+
+  app.post('/api/focus/:id/end', async (c) => {
+    let body: unknown
+    try { body = await c.req.json() } catch { return c.json({ error: '结束参数不是合法 JSON' }, 400) }
+    const parsed = EndFocusRequest.safeParse(body)
+    if (!parsed.success) return c.json({ error: '结束参数不对', issues: parsed.error.issues }, 400)
+    const ctx = ctxOf()
+    const response = endFocusSession(db, ctx, c.req.param('id'), parsed.data)
+    if (!response) return c.json({ error: '专注时段不存在' }, 404)
+    broadcastChanged(ctx.now)
+    return c.json(response)
   })
 
   // ── 事件流 ──────────────────────────────────────────────────────────
@@ -462,4 +698,3 @@ function daysFrom(iso: string, n: number): string {
   const pad = (x: number) => String(x).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
-
