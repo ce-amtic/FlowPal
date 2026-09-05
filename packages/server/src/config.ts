@@ -5,10 +5,53 @@ import { z } from 'zod'
  * 这是「将来能把 server 抽成独立后端」的其中一条保证：desktop 包算好 dataDir 再调
  * createServer()，server 自己不知道 Electron 存在，也不知道 app.getPath('userData')。
  */
+/** 请求体里由代码决定、配置不许覆盖的字段。写在这儿是为了覆盖时能大声报错 */
+const OWNED_PARAMS = ['model', 'messages', 'tools', 'tool_choice', 'response_format', 'stream']
+
+/**
+ * 原样并进请求体的额外字段。
+ *
+ * 各家都说自己是「OpenAI 兼容」，但控制推理强度这件事上谁也不一样：DeepSeek 同时有
+ * 顶层 `reasoning_effort` 和它自己的 `thinking: {type}`，Anthropic 是
+ * `thinking.budget_tokens`，Google 是 `thinkingConfig`，Qwen 是 `enable_thinking`。
+ * 把它们逐个建模成类型字段，就是把「换一家」重新变成改代码。
+ *
+ * 所以这里不理解语义，只透传。代价是写错了要等供应商回 400——那是响亮的失败，
+ * 可以接受；真正危险的是悄悄覆盖掉代码自己在用的字段，所以那些单独拦下来。
+ */
+const ProviderParams = z.record(z.string(), z.unknown()).refine(
+  (p) => !OWNED_PARAMS.some((k) => k in p),
+  { message: `不能覆盖这些字段（它们由代码决定）：${OWNED_PARAMS.join(', ')}` },
+)
+
+/**
+ * 思考强度的三档。
+ *
+ * 只有三档，因为再细的差别我们测不出来：`bench:now` 上「最低」和「默认」之间的
+ * 波动已经大过它们的间距。
+ *
+ * 档位由调用点决定，不由配置决定——同一个模型，答「此刻」要快，改库要稳，
+ * 这是两件事。配置只负责说明这一家怎么拼写这三档。
+ */
+export const Effort = z.enum(['none', 'low', 'high'])
+export type Effort = z.infer<typeof Effort>
+
 export const ModelConfig = z.object({
   baseUrl: z.string(),
   apiKey: z.string(),
   model: z.string(),
+  /** 与调用点无关、每次请求都带上的字段 */
+  params: ProviderParams.default({}),
+  /**
+   * 三档各自要往请求体里加什么。整张表要么不写（那就没有强度控制，等同于全用
+   * 供应商默认），要么三档写全——缺一档就做默认回退的话，某个调用点会悄悄跑在
+   * 别的强度上，而这种事只能靠账单发现。
+   */
+  effort: z.object({
+    none: ProviderParams,
+    low: ProviderParams,
+    high: ProviderParams,
+  }).optional(),
 })
 export type ModelConfig = z.infer<typeof ModelConfig>
 

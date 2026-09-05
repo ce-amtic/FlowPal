@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type OpenAI from 'openai'
 import type { AgentToolName, Ctx, Fragment, RunCounts } from '@flowpal/shared'
-import { agentToolParameters } from '@flowpal/shared'
+import { agentToolParameters, markupGuide } from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
 import { callAgent, type AgentToolSpec } from '../llm/client.ts'
 import { buildAgentContext } from './context.ts'
@@ -49,7 +49,12 @@ export async function runAgentLoop(
   emitToolCall?: (e: AgentLoopEvent) => void,
 ): Promise<AgentLoopResult> {
   const model = fragment.rawType === 'image' ? config.llm.vision : config.llm.text
-  const system = readFileSync(join(config.promptsDir, 'agent.md'), 'utf8')
+  /*
+   * 语法说明由元素表生成，不写在 agent.md 里。手写的那一份会和表分头演化，而它们
+   * 不一致的症状是「模型用了应用不认识的标签」——回复看着正常，只是那一行变成纯
+   * 文字，没有任何地方会报错。
+   */
+  const system = `${readFileSync(join(config.promptsDir, 'agent.md'), 'utf8')}\n\n${markupGuide()}`
 
   const userText = buildAgentContext(db, ctx, fragment)
   const userContent: OpenAI.Chat.ChatCompletionContentPart[] = [{ type: 'text', text: userText }]
@@ -67,7 +72,12 @@ export async function runAgentLoop(
   const droppedIds = new Set<string>()
 
   for (let step = 1; step <= MAX_STEPS; step += 1) {
-    const res = await callAgent(model, { messages, tools: toolSpecs() })
+    /*
+     * 这条路在改库，而且改错了要靠人回头去发现——合并到哪一条、算不算同一件事，
+     * 都是要想一下的判断。用户不在等这一步的结果（回执随后才出现），几秒钟换稳当
+     * 是划算的。
+     */
+    const res = await callAgent(model, { messages, tools: toolSpecs(), effort: 'low' })
     if (res.toolCalls.length === 0) {
       counts.updated = updatedIds.size
       counts.dropped = droppedIds.size

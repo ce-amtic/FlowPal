@@ -8,6 +8,9 @@ import type { FocusSession } from '@flowpal/shared'
  *
  * 写操作不落任何地方：样例模式是用来对版式的，不是用来试流程的。
  */
+/** 只用来表示「向导早就走完了」，具体是哪天不重要，界面上也不显示 */
+const SETTLED_LONG_AGO = '2026-08-16T09:00:00+08:00'
+
 const delay = <T>(value: T): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), 120))
 
@@ -64,6 +67,13 @@ export const mockApi: Api = {
     return delay({ items, count: items.length })
   },
 
+  // 样例模式下向导已经走完，否则一开界面就是欢迎页，对不了版式
+  patchSettings: () => Promise.reject(new Error('样例模式下不写入数据。')),
+
+  postFocusSession: () => Promise.reject(new Error('样例模式下不写入数据。')),
+
+  uploadImage: () => Promise.reject(new Error('样例模式下不写入数据。')),
+
   listThoughts: () => delay({
     thoughts: ITEMS.filter((i) => i.type === 'thought' && i.status === 'active'),
   }),
@@ -83,6 +93,9 @@ export const mockApi: Api = {
       ruc: { authorized: false, role: null, lastSessionAt: null },
       chronotype: { workdayWakeTime: null, freeDayWakeTime: null },
       sync: { enabled: false, intervalMinutes: 360 },
+      chronotype_workday_wake: '07:30',
+      chronotype_restday_wake: '10:00',
+      onboarded_at: SETTLED_LONG_AGO,
     },
     sync: { runningRunId: null, nextRunAt: null, capabilities: [], recentRuns: [] },
   }),

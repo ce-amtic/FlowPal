@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, globalShortcut, ipcMain } from 'electron'
+import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, nativeTheme } from 'electron'
 import { join } from 'node:path'
 import { createServer, loadConfig } from '@flowpal/server'
 
@@ -21,6 +21,23 @@ const isDev = !app.isPackaged
 
 let win: BrowserWindow | null = null
 
+/**
+ * 没有毛玻璃的平台上，窗口这一层就是用户看见的底，必须跟着系统深浅走。
+ * 写死一个浅色的话，深色模式下浅底会从透明的界面底下透上来。
+ *
+ * 这几个值是 packages/app/src/tokens/tokens.css 里 --bg-solid 与 --fg 的第二份
+ * 拷贝——主进程读不到 CSS。改配色时这里要跟着改。
+ */
+const isDark = () => nativeTheme.shouldUseDarkColors
+const windowBg = () => (isDark() ? '#1d1c1a' : '#faf9f7')
+
+/** Windows 的窗口按钮覆盖层。高度对齐界面里的 --titlebar-h */
+const windowControls = () => ({
+  color: windowBg(),
+  symbolColor: isDark() ? '#ece9e4' : '#1c1b19',
+  height: 44,
+})
+
 app.whenReady().then(() => {
   // dataDir 由这一侧算好传进去；server 自己不知道 app.getPath 存在。
   const server = createServer(loadConfig(repoRoot, {
@@ -39,17 +56,34 @@ app.whenReady().then(() => {
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     trafficLightPosition: isMac ? { x: 18, y: 18 } : undefined,
     // Windows 上没有 hiddenInset，用系统按钮覆盖层顶上。
-    titleBarOverlay: isMac ? undefined : { color: '#00000000', symbolColor: '#888', height: 44 },
+    titleBarOverlay: isMac ? undefined : windowControls(),
     // 毛玻璃底，窗口背景必须透明才透得出来。
     vibrancy: isMac ? 'under-window' : undefined,
     visualEffectState: 'active',
-    backgroundColor: isMac ? '#00000000' : '#faf9f7',
+    backgroundColor: isMac ? '#00000000' : windowBg(),
     show: false,
     webPreferences: { preload: join(import.meta.dirname, 'preload.mjs'), sandbox: false },
   })
 
   // 等首帧再显示，避免开窗时闪一下白。
   win.once('ready-to-show', () => win?.show())
+
+  /*
+   * 界面加载不上时，上面那一行就永远不会触发，于是应用在跑、server 在跑、窗口
+   * 却根本不出现，终端里一个字都没有。开发时最常见的原因是界面那条 dev server
+   * 没起来。这里必须喊出来，不能让它静悄悄地什么都不发生。
+   */
+  win.webContents.on('did-fail-load', (_e, code, description, url) => {
+    console.error(`界面加载失败：${url} → ${description}（${code}）`)
+  })
+
+  // 系统在运行中切深浅时，这两层不会自己跟着变。macOS 的毛玻璃会，所以不用管。
+  if (!isMac) {
+    nativeTheme.on('updated', () => {
+      win?.setBackgroundColor(windowBg())
+      win?.setTitleBarOverlay(windowControls())
+    })
+  }
 
   if (isDev) win.loadURL('http://localhost:5173')
   else win.loadFile(join(repoRoot, 'packages/app/dist/index.html'))

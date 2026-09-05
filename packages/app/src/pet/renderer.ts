@@ -10,7 +10,16 @@ import {
   PET_VERTEX_SHADER,
 } from './shader.ts'
 
-export type PetSize = 96 | 224
+export type PetSize = 96 | 128 | 224
+
+/** The expression presets from quiet-pebble.html. */
+export type PetExpression =
+  | 'calm'
+  | 'happy'
+  | 'sleepy'
+  | 'curious'
+  | 'surprised'
+  | 'focus'
 
 export interface PetPointer {
   x: number
@@ -25,6 +34,7 @@ export type PetInteraction =
   | { type: 'dragstart'; pointer: PetPointer }
   | { type: 'dragmove'; pointer: PetPointer }
   | { type: 'pointerup'; pointer: PetPointer; dragged: boolean }
+  | { type: 'doubleclick'; pointer: PetPointer }
   | { type: 'pointercancel'; pointer: PetPointer }
   | { type: 'keyboard'; key: string }
 
@@ -38,8 +48,20 @@ export interface PetRendererOptions {
 
 export interface PetRenderer {
   mount(): void
+  /** Re-measure a host that may have transitioned from hidden to visible. */
+  refresh(): void
   setStatus(status: PetStatus, meta?: PetStatusMeta): void
-  setTheme(theme: { color?: PetColor; size?: PetSize; reducedMotion?: boolean }): void
+  setTheme(theme: { color?: PetColor; size?: PetSize; softness?: number; reducedMotion?: boolean }): void
+  setColor(color: PetColor): void
+  setSize(size: PetSize): void
+  setExpression(expression: PetExpression, durationMs?: number): void
+  press(amount?: number): void
+  tap(): void
+  setNativeWindowDrag(enabled: boolean): void
+  hop(): void
+  turn(angle: number): void
+  focus(value?: boolean): void
+  reset(): void
   hitTest(localPoint: { x: number; y: number }): boolean
   startDrag(pointer: PetPointer): void
   updatePointer(pointer: PetPointer): void
@@ -66,13 +88,36 @@ const STATUS_COLOR: Record<PetStatus, readonly [number, number, number]> = {
 
 type EyeStyle = readonly [number, number, number, number]
 
-const EYE_STYLE: Record<PetStatus, EyeStyle> = {
-  idle: [1.0, 0.0, 0.0, 0.0],
-  receiving: [0.78, 0.12, 0.0, 0.0],
-  processing: [0.68, 0.0, 0.08, 0.03],
-  done: [0.78, 0.58, 0.0, 0.0],
-  error: [0.48, 0.0, 0.0, 0.08],
-  focus: [0.64, 0.0, 0.0, -0.12],
+const EXPRESSION_LABELS: Record<PetExpression, string> = {
+  calm: '待在这里',
+  happy: '有一点开心',
+  sleepy: '有一点困了',
+  curious: '让我想想',
+  surprised: '诶？',
+  focus: '安静地专注',
+}
+
+// The four values are opening, curved-closed-eye mix, per-eye asymmetry and
+// tilt. These are intentionally the same presets as quiet-pebble.html.
+const EXPRESSION_STYLE: Record<PetExpression, EyeStyle> = {
+  calm: [1.0, 0.0, 0.0, 0.0],
+  happy: [0.7, 1.0, 0.0, 0.0],
+  sleepy: [0.24, 0.0, 0.0, 0.0],
+  curious: [0.90, 0.0, 0.32, 0.1],
+  surprised: [1.3, 0.0, 0.0, 0.0],
+  // Focus keeps the idle capsule silhouette, but lowers its opening and adds
+  // only a slight inward tilt.  It should read as attentive, not cheerful or
+  // sleepy.
+  focus: [0.88, 0.0, 0.04, -0.08],
+}
+
+const STATUS_EXPRESSION: Record<PetStatus, PetExpression> = {
+  idle: 'calm',
+  receiving: 'happy',
+  processing: 'focus',
+  done: 'happy',
+  error: 'surprised',
+  focus: 'focus',
 }
 
 type Uniforms = {
@@ -89,6 +134,7 @@ type Uniforms = {
   statusColor: WebGLUniformLocation | null
   elevation: WebGLUniformLocation | null
   eyeStyle: WebGLUniformLocation | null
+  eyeLength: WebGLUniformLocation | null
 }
 
 type Point = { x: number; y: number }
@@ -106,6 +152,11 @@ type Gesture = {
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value))
 
+// Keep a normal click comfortably below the long-press threshold. The earlier
+// 220ms threshold was easy to cross while a transparent resident window was
+// settling focus, which made an intended single click open the main window.
+const LONG_PRESS_MS = 800
+
 const spring = (
   position: number,
   velocity: number,
@@ -119,9 +170,10 @@ const spring = (
 }
 
 /**
- * A renderer-only WebGL pet.  It intentionally knows nothing about Electron,
- * HTTP, SQLite, or the main window.  The future Electron shell can forward
- * pointer events and status commands through the small interface above.
+ * A renderer-only WebGL pet. It intentionally knows nothing about Electron,
+ * HTTP, SQLite, or the main window. The shell only forwards the interaction
+ * events from this class; all visual presets and physical motion stay here so
+ * the inline and resident presentations cannot drift apart.
  */
 export class WebGLPetRenderer implements PetRenderer {
   readonly state: PetStateMachine
@@ -140,17 +192,24 @@ export class WebGLPetRenderer implements PetRenderer {
   private raf = 0
   private blinkTimer = 0
   private pressTimer = 0
+  private releaseTimer = 0
+  private expressionTimer = 0
+  private tapTimer = 0
+  private nativeWindowDrag = false
+  private grabbedPose = false
   private actionTimer = 0
+  private longPressActive = false
   private actionPreviousStatus: PetStatus | null = null
   private actionPreviousMeta: PetStatusMeta = {}
   private blinkStartedAt = 0
   private lastFrame = 0
-  private lastDrawAt = 0
   private disposed = false
   private mounted = false
   private reducedMotion: boolean
   private size: PetSize
   private color: PetColor = 'chalk'
+  /** Softness is the same 0..1 material parameter used by quiet-pebble. */
+  private softness = 0.65
   private dpr = 1
   private width = 0
   private height = 0
@@ -176,7 +235,17 @@ export class WebGLPetRenderer implements PetRenderer {
   private targetGazeX = 0
   private targetGazeY = 0
   private gesture: Gesture | null = null
+  // Keep the native transparent-window hit-test stable. Emitting `hit` on
+  // every pointermove repeatedly calls setIgnoreMouseEvents(), which can race
+  // the next pointerdown/drag event on macOS and make the pet impossible to
+  // pick up. Only transitions (outside -> inside or inside -> outside) need a
+  // native hit-test update.
+  private hitInside = false
   private statusMeta: PetStatusMeta = {}
+  private expression: PetExpression = 'calm'
+  private transientExpression: PetExpression | null = null
+  private eyeStyle: [number, number, number, number] = [...EXPRESSION_STYLE.calm]
+  private targetEyeStyle: EyeStyle = EXPRESSION_STYLE.calm
 
   constructor(options: PetRendererOptions) {
     this.canvas = options.canvas
@@ -191,7 +260,13 @@ export class WebGLPetRenderer implements PetRenderer {
     if (this.disposed || this.mounted) return
     this.mounted = true
     this.canvas.setAttribute('role', 'img')
-    this.canvas.setAttribute('aria-label', 'FlowPal 桌宠。点击、长按或拖动。')
+    // The detached resident pet keeps a single click local (press/spring).
+    // Opening the main window is an explicit keyboard/input action; keeping
+    // that contract in the accessibility label prevents the old click-to-open
+    // behavior from being reintroduced by a shell or QA harness.
+    this.canvas.setAttribute('aria-label', 'FlowPal 桌宠。单击抚摸，长按读取剪贴板，拖动可移动。')
+    this.canvas.dataset.expression = this.effectiveExpression
+    this.canvas.setAttribute('aria-description', EXPRESSION_LABELS[this.effectiveExpression])
     this.canvas.tabIndex = 0
     this.attachDomListeners()
     this.resizeObserver = typeof ResizeObserver === 'undefined'
@@ -223,20 +298,163 @@ export class WebGLPetRenderer implements PetRenderer {
 
   setStatus(status: PetStatus, meta: PetStatusMeta = {}): void {
     if (this.disposed) return
+    const previousStatus = this.state.snapshot.status
     this.statusMeta = meta
     this.state.set(status, meta)
+    // Work states provide a sensible expression in the resident pet, while a
+    // short interaction expression (for example the happy landing pose) is
+    // allowed to finish before the status becomes the visual source of truth.
+    if (previousStatus !== status) {
+      // Update the base expression even while a short interaction pose is
+      // playing. The transient pose will expire back to this latest server
+      // state instead of an outdated receiving/idle face.
+      this.expression = STATUS_EXPRESSION[status]
+      this.canvas.dataset.expression = this.effectiveExpression
+      this.canvas.setAttribute('aria-description', EXPRESSION_LABELS[this.effectiveExpression])
+      this.updateEyeTarget()
+    }
+    this.scheduleBlink()
     this.wake()
   }
 
-  setTheme(theme: { color?: PetColor; size?: PetSize; reducedMotion?: boolean }): void {
+  setTheme(theme: { color?: PetColor; size?: PetSize; softness?: number; reducedMotion?: boolean }): void {
     if (theme.color && theme.color in PALETTE) this.color = theme.color
     if (theme.size) this.size = theme.size
+    if (theme.softness !== undefined) this.softness = clamp(theme.softness, 0, 1)
     if (theme.reducedMotion !== undefined) {
       this.reducedMotion = theme.reducedMotion
       if (this.reducedMotion) window.clearTimeout(this.blinkTimer)
       else this.scheduleBlink()
     }
     this.resize()
+    this.wake()
+  }
+
+  refresh(): void {
+    if (this.disposed) return
+    this.resize()
+    this.wake()
+  }
+
+  setExpression(expression: PetExpression, durationMs = 0): void {
+    if (this.disposed || !(expression in EXPRESSION_STYLE)) return
+    window.clearTimeout(this.expressionTimer)
+    this.expressionTimer = 0
+    if (durationMs > 0) {
+      this.transientExpression = expression
+      this.expressionTimer = window.setTimeout(() => {
+        this.expressionTimer = 0
+        this.transientExpression = null
+        this.canvas.dataset.expression = this.effectiveExpression
+        this.canvas.setAttribute('aria-description', EXPRESSION_LABELS[this.effectiveExpression])
+        this.updateEyeTarget()
+        this.wake()
+      }, durationMs)
+    } else {
+      this.expression = expression
+      this.transientExpression = null
+    }
+    this.canvas.dataset.expression = this.effectiveExpression
+    this.canvas.setAttribute('aria-description', EXPRESSION_LABELS[this.effectiveExpression])
+    this.updateEyeTarget()
+    this.targetGazeX = 0
+    this.targetGazeY = 0
+    this.wake()
+  }
+
+  setColor(color: PetColor): void {
+    this.setTheme({ color })
+  }
+
+  setSize(size: PetSize): void {
+    this.setTheme({ size })
+  }
+
+  press(amount = 0.65): void {
+    if (this.disposed) return
+    window.clearTimeout(this.releaseTimer)
+    this.setExpression('happy', 950)
+    this.setPoseTarget(clamp(Number(amount) || 0, 0, 1))
+    this.setInteractionStatus('receiving', '轻轻压一下')
+    this.releaseTimer = window.setTimeout(() => {
+      this.releaseTimer = 0
+      this.targetSquash = 1
+      this.wake()
+    }, this.reducedMotion ? 120 : 480)
+    this.wake()
+  }
+
+  /** Local floating-pet tap: visual feedback only, without changing work status. */
+  tap(): void {
+    if (this.disposed) return
+    window.clearTimeout(this.tapTimer)
+    const baseExpression = this.expression
+    // A focused pet stays focused when touched; the press/squash supplies the
+    // feedback without turning the face into a smile.
+    this.setExpression(baseExpression === 'focus' ? 'focus' : 'happy', 0)
+    this.setPoseTarget(0.45)
+    window.clearTimeout(this.releaseTimer)
+    this.releaseTimer = window.setTimeout(() => {
+      this.releaseTimer = 0
+      this.targetSquash = 1
+      this.wake()
+    }, this.reducedMotion ? 120 : 480)
+    this.tapTimer = window.setTimeout(() => {
+      this.tapTimer = 0
+      if (this.disposed) return
+      this.setExpression(baseExpression)
+      this.targetSquash = 1
+      this.wake()
+    }, this.reducedMotion ? 420 : 900)
+    this.wake()
+  }
+
+  hop(): void {
+    if (this.disposed || this.gesture) return
+    this.stopPress()
+    this.setExpression('happy', 1000)
+    this.z = Math.max(this.z, 1)
+    this.velocityZ = this.reducedMotion ? 100 : 210
+    this.setInteractionStatus('receiving', '轻轻弹一下')
+    this.wake()
+  }
+
+  turn(angle: number): void {
+    if (this.disposed || !Number.isFinite(angle)) return
+    this.targetYaw = angle
+    this.setInteractionStatus('receiving', '慢慢转过来')
+    this.wake()
+  }
+
+  focus(value = true): void {
+    this.setExpression(value ? 'focus' : 'calm')
+    this.setStatus(value ? 'focus' : 'idle')
+  }
+
+  reset(): void {
+    if (this.disposed) return
+    if (this.gesture) this.cancelGesture()
+    window.clearTimeout(this.actionTimer)
+    window.clearTimeout(this.releaseTimer)
+    window.clearTimeout(this.expressionTimer)
+    window.clearTimeout(this.tapTimer)
+    this.actionTimer = 0
+    this.releaseTimer = 0
+    this.expressionTimer = 0
+    this.tapTimer = 0
+    this.actionPreviousStatus = null
+    this.actionPreviousMeta = {}
+    this.targetX = this.width * 0.5
+    this.targetZ = 0
+    this.z = 0
+    this.velocityZ = 0
+    this.targetSquash = 1
+    this.targetLean = 0
+    this.targetYaw = 0
+    this.targetGazeX = 0
+    this.targetGazeY = 0
+    this.setExpression('calm')
+    this.setStatus('idle', { message: '回到原位' })
     this.wake()
   }
 
@@ -273,10 +491,15 @@ export class WebGLPetRenderer implements PetRenderer {
     this.cancelAnimation()
     window.clearTimeout(this.blinkTimer)
     window.clearTimeout(this.pressTimer)
+    window.clearTimeout(this.releaseTimer)
+    window.clearTimeout(this.expressionTimer)
     window.clearTimeout(this.actionTimer)
     this.blinkTimer = 0
     this.pressTimer = 0
+    this.releaseTimer = 0
+    this.expressionTimer = 0
     this.actionTimer = 0
+    this.longPressActive = false
     this.actionPreviousStatus = null
     this.actionPreviousMeta = {}
     this.resizeObserver?.disconnect()
@@ -302,7 +525,10 @@ export class WebGLPetRenderer implements PetRenderer {
       alpha: true,
       antialias: true,
       premultipliedAlpha: false,
-      powerPreference: 'low-power',
+      // The pet is a small ray-marched vector-like scene. Prefer the GPU so
+      // high-DPI backing buffers can preserve the contour instead of forcing
+      // the resident window through a blurry low-resolution path.
+      powerPreference: 'high-performance',
       preserveDrawingBuffer: false,
     })
     if (!gl) {
@@ -412,6 +638,7 @@ export class WebGLPetRenderer implements PetRenderer {
       statusColor: get('statusColor'),
       elevation: get('elevation'),
       eyeStyle: get('eyeStyle'),
+      eyeLength: get('eyeLength'),
     }
   }
 
@@ -427,16 +654,36 @@ export class WebGLPetRenderer implements PetRenderer {
   private resize(): void {
     if (this.disposed) return
     const rect = this.canvas.getBoundingClientRect()
-    this.width = Math.max(1, rect.width)
-    this.height = Math.max(1, rect.height)
-    this.dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+    const oldWidth = this.width
+    // CSS teleport animations transform the host/canvas. getBoundingClientRect
+    // then reports the animated (for example 0.78x) box, which would resize
+    // the WebGL backing store and leave a cropped image after the transform
+    // ends. offsetWidth/offsetHeight stay at the layout A-size throughout the
+    // animation; use them whenever the element is laid out.
+    this.width = Math.max(1, this.canvas.offsetWidth || rect.width)
+    this.height = Math.max(1, this.canvas.offsetHeight || rect.height)
+    // The previous 1.5x cap was visibly soft on Retina displays, especially
+    // around the eyes and the contact shadow. The renderer is procedural (no
+    // bitmap texture to upscale), so a 2x backing buffer gives crisp vector-
+    // like edges while keeping the 224px resident window inexpensive.
+    this.dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2)
     const pixelWidth = Math.max(1, Math.round(this.width * this.dpr))
     const pixelHeight = Math.max(1, Math.round(this.height * this.dpr))
     if (this.canvas.width !== pixelWidth) this.canvas.width = pixelWidth
     if (this.canvas.height !== pixelHeight) this.canvas.height = pixelHeight
     this.groundY = this.height * 0.70
     this.unit = Math.max(18, Math.min(this.size, this.width * 0.65) / 2.27)
-    if (this.x === 0) this.x = this.width * 0.5
+    // A hidden inline host remains mounted off-flow, but older styles or a
+    // browser transition can still report a transient 0/1px box. Do not scale
+    // the logical position from that sentinel size.
+    if (oldWidth > 2 && this.height > 2) {
+      const ratio = this.width / oldWidth
+      this.x *= ratio
+      this.targetX *= ratio
+    } else if (oldWidth <= 2 || this.x === 0) {
+      this.x = this.width * 0.5
+      this.targetX = this.x
+    }
     this.targetX = clamp(this.targetX || this.x, this.unit * 1.25, this.width - this.unit * 1.25)
     this.x = clamp(this.x, this.unit * 1.25, this.width - this.unit * 1.25)
     this.gl?.viewport(0, 0, pixelWidth, pixelHeight)
@@ -450,14 +697,50 @@ export class WebGLPetRenderer implements PetRenderer {
     this.addListener(this.canvas, 'pointercancel', this.handlePointerCancel)
     this.addListener(this.canvas, 'lostpointercapture', this.handleLostPointerCapture)
     this.addListener(this.canvas, 'pointerleave', this.handlePointerLeave)
+    // A transparent Electron window may still synthesize a DOM click after a
+    // pointer sequence.  There is no default action for the canvas, but
+    // stopping these events prevents an embedding shell (or a stale listener
+    // from a previous renderer) from treating one tap as navigation.  Tap
+    // Navigation is handled by the single pointerup gesture in the host;
+    // hover feedback is emitted through the hit event above.
+    this.addListener(this.canvas, 'click', this.blockNativeClick)
+    this.addListener(this.canvas, 'dblclick', this.handleDoubleClick)
     this.addListener(this.canvas, 'keydown', this.handleKeyDown)
     this.addListener(document, 'visibilitychange', this.handleVisibility)
     this.addListener(this.canvas, 'webglcontextlost', this.handleContextLost)
     this.addListener(this.canvas, 'webglcontextrestored', this.handleContextRestored)
   }
 
+  private readonly blockNativeClick = (event: Event): void => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  private readonly handleDoubleClick = (event: Event): void => {
+    const pointerEvent = event as MouseEvent
+    if (pointerEvent.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    const point = this.pointFromEvent(pointerEvent as PointerEvent)
+    if (this.hitTest(point)) {
+      this.emit({ type: 'doubleclick', pointer: { x: point.x, y: point.y, pointerId: 0 } })
+    }
+  }
+
+  setNativeWindowDrag(enabled: boolean): void {
+    this.nativeWindowDrag = enabled
+    if (enabled) {
+      this.targetX = this.width * 0.5
+      this.targetZ = 0
+    }
+    this.wake()
+  }
+
   private readonly handlePointerDown = (event: Event): void => {
     const pointerEvent = event as PointerEvent
+    // Only primary-button presses participate in tap/double-tap gestures.
+    // Secondary clicks should never navigate the main window.
+    if (pointerEvent.button !== 0) return
     const point = this.pointFromEvent(pointerEvent)
     if (this.gesture || !this.hitTest(point)) return
     pointerEvent.preventDefault()
@@ -481,10 +764,32 @@ export class WebGLPetRenderer implements PetRenderer {
     }
     const inside = this.hitTest(point)
     this.canvas.style.cursor = inside ? 'grab' : 'default'
-    this.emit({ type: 'hit', inside })
-    if (!this.gesture && this.state.snapshot.status !== 'focus') {
-      this.targetGazeX = clamp((point.x - this.x) / Math.max(this.width, 1) * 0.13, -0.045, 0.045)
-      this.targetGazeY = clamp((this.groundY - this.unit * 0.81 - point.y) / Math.max(this.height, 1) * 0.08, -0.028, 0.028)
+    if (inside !== this.hitInside) {
+      this.hitInside = inside
+      this.emit({ type: 'hit', inside })
+    }
+    if (!this.gesture) {
+      // The resident pet has a lively, wide gaze.  Focus mode deliberately
+      // keeps the same compact tracking envelope as the original design so
+      // the eyes remain calm while the main window is active.
+      const focused = this.effectiveExpression === 'focus'
+      // Ambient/idle mode should visibly notice the cursor across the whole
+      // pet rather than only when it is already near the eyes. Focus mode
+      // keeps its deliberately small envelope so the gaze stays settled.
+      const horizontalRange = focused ? 0.022 : 0.28
+      const verticalRange = focused ? 0.014 : 0.16
+      const horizontalGain = focused ? 0.07 : 1.05
+      const verticalGain = focused ? 0.04 : 0.62
+      this.targetGazeX = clamp(
+        (point.x - this.x) / Math.max(this.width, 1) * horizontalGain,
+        -horizontalRange,
+        horizontalRange,
+      )
+      this.targetGazeY = clamp(
+        (this.groundY - this.unit * 0.81 - point.y) / Math.max(this.height, 1) * verticalGain,
+        -verticalRange,
+        verticalRange,
+      )
       this.wake()
     }
   }
@@ -493,7 +798,10 @@ export class WebGLPetRenderer implements PetRenderer {
     const pointerEvent = event as PointerEvent
     if (this.gesture?.id !== pointerEvent.pointerId) return
     const point = this.pointFromEvent(pointerEvent)
-    this.finishGesture(pointerEventToPetPointer(pointerEvent, point), true)
+    const gesture = this.gesture
+    const pointer = pointerEventToPetPointer(pointerEvent, point)
+    this.finishGesture(pointer, true)
+    this.longPressActive = false
   }
 
   private readonly handlePointerCancel = (event: Event): void => {
@@ -507,28 +815,51 @@ export class WebGLPetRenderer implements PetRenderer {
     const pointerEvent = event as PointerEvent
     if (this.gesture?.id !== pointerEvent.pointerId) return
     const point = this.pointFromEvent(pointerEvent)
-    this.cancelGesture(pointerEventToPetPointer(pointerEvent, point))
+    // Treat lost capture as a normal release. This keeps the drop/bounce when
+    // a pointer crosses a transparent Electron window edge.
+    this.finishGesture(pointerEventToPetPointer(pointerEvent, point), true)
   }
 
   private readonly handlePointerLeave = (): void => {
-    this.emit({ type: 'hit', inside: false })
-    if (!this.gesture) {
-      this.targetGazeX = 0
-      this.targetGazeY = 0
-      this.wake()
+    // Once a drag has started, pointer capture may still deliver movement
+    // outside the mascot/window bounds. Do not report `inside=false` here:
+    // that would re-enable transparent click-through in the main process and
+    // cut off the rest of the drag session.
+    if (this.gesture) return
+    if (this.hitInside) {
+      this.hitInside = false
+      this.emit({ type: 'hit', inside: false })
     }
+    this.targetGazeX = 0
+    this.targetGazeY = 0
+    this.wake()
   }
 
   private readonly handleKeyDown = (event: Event): void => {
     const keyboard = event as KeyboardEvent
-    if (!['ArrowLeft', 'ArrowRight', ' ', 'p', 'P', 'Escape'].includes(keyboard.key)) return
+    if (!['ArrowLeft', 'ArrowRight', ' ', 'p', 'P', 'Escape', '1', '2', '3', '4', '5', '6'].includes(keyboard.key)) return
     keyboard.preventDefault()
     this.emit({ type: 'keyboard', key: keyboard.key })
-    if (keyboard.key === 'ArrowLeft') this.targetX = clamp(this.targetX - 30, this.unit * 1.25, this.width - this.unit * 1.25)
-    else if (keyboard.key === 'ArrowRight') this.targetX = clamp(this.targetX + 30, this.unit * 1.25, this.width - this.unit * 1.25)
-    else if (keyboard.key === ' ') this.bounce()
+    const presetByKey: Record<string, PetExpression> = {
+      '1': 'calm',
+      '2': 'happy',
+      '3': 'sleepy',
+      '4': 'curious',
+      '5': 'surprised',
+      '6': 'focus',
+    }
+    const preset = presetByKey[keyboard.key]
+    if (preset) {
+      this.setExpression(preset)
+    } else if (keyboard.key === 'ArrowLeft') {
+      this.targetX = clamp(this.targetX - 30, this.unit * 1.25, this.width - this.unit * 1.25)
+      this.setExpression('curious', 700)
+    } else if (keyboard.key === 'ArrowRight') {
+      this.targetX = clamp(this.targetX + 30, this.unit * 1.25, this.width - this.unit * 1.25)
+      this.setExpression('curious', 700)
+    } else if (keyboard.key === ' ') this.hop()
     else if (keyboard.key.toLowerCase() === 'p') this.press()
-    else this.cancelGesture()
+    else this.reset()
     this.wake()
   }
 
@@ -556,6 +887,7 @@ export class WebGLPetRenderer implements PetRenderer {
 
   private beginGesture(pointer: PetPointer, point: Point): void {
     window.clearTimeout(this.pressTimer)
+    this.longPressActive = false
     this.gesture = {
       id: pointer.pointerId,
       start: point,
@@ -573,11 +905,14 @@ export class WebGLPetRenderer implements PetRenderer {
       this.pressTimer = 0
       const gesture = this.gesture
       if (!this.disposed && gesture && !gesture.dragging) {
+        this.longPressActive = true
         this.targetSquash = 0.72
+        this.setExpression('happy', 1200)
+        this.setInteractionStatus('receiving', '轻轻抱住')
         this.emit({ type: 'longpress', pointer })
         this.wake()
       }
-    }, this.reducedMotion ? 260 : 220)
+    }, LONG_PRESS_MS)
     this.wake()
   }
 
@@ -588,13 +923,23 @@ export class WebGLPetRenderer implements PetRenderer {
       gesture.dragging = true
       window.clearTimeout(this.pressTimer)
       this.pressTimer = 0
-      this.targetSquash = 1.04
+      // A grabbed pet should look held, not enlarged: compress the body and
+      // switch to the surprised face before native window dragging begins.
+      this.targetSquash = 0.82
+      this.setExpression('surprised', 1100)
+      this.setInteractionStatus('receiving', '抱起来了')
       this.emit({ type: 'dragstart', pointer })
     }
     if (gesture.dragging) {
-      this.targetX = clamp(point.x - gesture.offsetX, this.unit * 1.25, this.width - this.unit * 1.25)
-      this.targetZ = clamp(this.groundY - (point.y - gesture.offsetY) - this.unit * 0.81, 0, Math.max(0, this.groundY - this.unit * 1.85))
-      this.targetLean = clamp(-this.velocityX / 550, -0.35, 0.35)
+      // Keep the held/compressed pose while the native window follows the
+      // pointer. The pet remains centered in the window, but its material
+      // still communicates that it is being grabbed.
+      this.targetSquash = 0.82
+      this.grabbedPose = true
+      if (!this.nativeWindowDrag) {
+        this.targetX = clamp(point.x - gesture.offsetX, this.unit * 1.25, this.width - this.unit * 1.25)
+        this.targetZ = clamp(this.groundY - (point.y - gesture.offsetY) - this.unit * 0.81, 0, Math.max(0, this.groundY - this.unit * 1.85))
+      }
       this.emit({ type: 'dragmove', pointer })
     }
     this.wake()
@@ -604,26 +949,43 @@ export class WebGLPetRenderer implements PetRenderer {
     const gesture = this.gesture
     if (!gesture || gesture.id !== pointer.pointerId) return
     const dragged = gesture.dragging
-    if (emit) this.emit({ type: 'pointerup', pointer, dragged })
+    // Clear the local gesture before notifying the Electron bridge. The bridge
+    // ends the native window drag synchronously; leaving this set until after
+    // emit would re-enter finishGesture and run the landing animation twice.
     this.releaseGesture()
+    this.grabbedPose = false
     this.targetSquash = 1
     this.targetZ = 0
     this.targetLean = 0
-    if (dragged) this.bounce(0.35, false)
+    if (dragged) {
+      // Once released, stop actively following the pointer and let gravity
+      // carry the pet down. The impact is converted into squash velocity in
+      // the next frame, just like quiet-pebble's physical drop.
+      this.velocityZ = Math.min(this.velocityZ, 80)
+      this.setExpression('happy', 900)
+      this.setInteractionStatus('receiving', '轻轻放下')
+    } else {
+      this.press(0.45)
+    }
     this.restoreGestureStatus(gesture.previousStatus, gesture.previousMeta)
+    if (emit) this.emit({ type: 'pointerup', pointer, dragged })
+    this.longPressActive = false
     this.wake()
   }
 
   private cancelGesture(pointer?: PetPointer): void {
     const gesture = this.gesture
     if (!gesture) return
-    if (pointer) this.emit({ type: 'pointercancel', pointer })
     const previous = gesture.previousStatus
     this.releaseGesture()
+    this.grabbedPose = false
     this.targetSquash = 1
     this.targetZ = 0
     this.targetLean = 0
+    this.velocityZ = Math.min(this.velocityZ, 80)
     this.restoreGestureStatus(previous, gesture.previousMeta)
+    this.longPressActive = false
+    if (pointer) this.emit({ type: 'pointercancel', pointer })
     this.wake()
   }
 
@@ -647,28 +1009,35 @@ export class WebGLPetRenderer implements PetRenderer {
     if (this.state.snapshot.status === 'receiving') this.setStatus(previous, meta)
   }
 
-  private press(): void {
-    this.targetSquash = 0.70
-    this.scheduleReceivingReset(this.reducedMotion ? 120 : 420)
+  private setPoseTarget(amount: number): void {
+    this.targetSquash = clamp(1 - amount * (0.14 + 0.24 * this.softness), 0.60, 1.3)
+  }
+
+  private stopPress(): void {
+    window.clearTimeout(this.pressTimer)
+    window.clearTimeout(this.releaseTimer)
+    this.pressTimer = 0
+    this.releaseTimer = 0
+    this.targetSquash = 1
     this.wake()
   }
 
-  private bounce(scale = 1, restoreStatus = true): void {
-    if (this.reducedMotion) return
-    this.velocityZ = Math.max(this.velocityZ, 180 * scale)
-    if (restoreStatus) this.scheduleReceivingReset(420)
-    else this.setStatus('receiving')
-    this.wake()
+  private setInteractionStatus(status: PetStatus, message: string): void {
+    this.scheduleReceivingReset(420, status, message)
   }
 
-  private scheduleReceivingReset(duration: number): void {
+  private scheduleReceivingReset(
+    duration: number,
+    status: PetStatus = 'receiving',
+    message?: string,
+  ): void {
     if (this.actionPreviousStatus === null) {
       this.actionPreviousStatus = this.state.snapshot.status
       this.actionPreviousMeta = this.state.snapshot.message
         ? { message: this.state.snapshot.message }
         : {}
     }
-    this.setStatus('receiving')
+    this.setStatus(status, message ? { message } : {})
     window.clearTimeout(this.actionTimer)
     this.actionTimer = window.setTimeout(() => {
       this.actionTimer = 0
@@ -685,12 +1054,20 @@ export class WebGLPetRenderer implements PetRenderer {
     }, duration)
   }
 
+  private get effectiveExpression(): PetExpression {
+    return this.transientExpression ?? this.expression
+  }
+
+  private updateEyeTarget(): void {
+    this.targetEyeStyle = EXPRESSION_STYLE[this.effectiveExpression]
+  }
+
   private scheduleBlink(): void {
     if (this.disposed) return
     window.clearTimeout(this.blinkTimer)
     if (this.reducedMotion) return
-    const focusDelay = this.state.snapshot.status === 'focus' ? 9000 : 4800
-    const delay = focusDelay + Math.random() * 4400
+    const focusDelay = this.effectiveExpression === 'focus' ? 15000 : 4800
+    const delay = focusDelay + Math.random() * (this.effectiveExpression === 'focus' ? 5000 : 4400)
     this.blinkTimer = window.setTimeout(() => {
       this.blinkTimer = 0
       if (!this.disposed && !document.hidden && !this.gesture && !this.reducedMotion) {
@@ -718,32 +1095,67 @@ export class WebGLPetRenderer implements PetRenderer {
     const dt = Math.min(Math.max((time - this.lastFrame) / 1000, 0), 0.025)
     this.lastFrame = time
     const status = this.state.snapshot.status
-    const slowAmbient = !this.reducedMotion && !this.gesture && (status === 'idle' || status === 'focus')
-    if (slowAmbient && time - this.lastDrawAt < 1000 / 30) {
-      this.raf = window.requestAnimationFrame(this.frame)
-      return
-    }
-    const idleAmplitude = this.reducedMotion ? 0 : status === 'focus' ? 0.006 : status === 'idle' ? 0.014 : 0.004
-    const breathing = Math.sin(time / (status === 'focus' ? 1450 : 1050)) * idleAmplitude
-    const squashTarget = this.gesture ? this.targetSquash : this.targetSquash + breathing
+    let squashTarget = this.targetSquash
     ;[this.x, this.velocityX] = spring(this.x, this.velocityX, this.targetX, 170, 22, dt)
-    ;[this.z, this.velocityZ] = spring(this.z, this.velocityZ, this.targetZ, 180, 24, dt)
-    ;[this.squash, this.velocitySquash] = spring(this.squash, this.velocitySquash, squashTarget, 170, 18, dt)
-    ;[this.lean, this.velocityLean] = spring(this.lean, this.velocityLean, this.targetLean, 130, 17, dt)
-    ;[this.yaw, this.velocityYaw] = spring(this.yaw, this.velocityYaw, this.targetYaw, 60, 16, dt)
-    if (!this.gesture && this.z > 0) {
-      this.velocityZ -= 900 * dt
-      if (this.z <= 0) {
-        this.z = 0
-        this.velocityZ = 0
+    if (this.gesture?.dragging) {
+      ;[this.z, this.velocityZ] = spring(this.z, this.velocityZ, this.targetZ, 180, 24, dt)
+      this.targetSquash = this.grabbedPose ? 0.82 : 1 + this.softness * 0.08
+      this.targetLean = clamp(-this.velocityX / 550, -0.35, 0.35)
+    } else {
+      if (this.effectiveExpression === 'focus' && !this.reducedMotion) {
+        // A quiet working rhythm keeps the focused pet alive without making
+        // it look like it is idling or celebrating. The body alternates
+        // between slightly wider/flatter and slightly taller/narrower; the
+        // amplitude remains visible at the 128px inline size without becoming
+        // a distraction during focused work.
+        const workPulse = Math.sin(time * 0.0017)
+        this.targetSquash = 1 + workPulse * 0.05
+        this.targetLean = workPulse * 0.012
+        squashTarget = this.targetSquash
+      } else {
+        if (!this.gesture && this.effectiveExpression !== 'focus') {
+          this.targetSquash = 1
+          squashTarget = this.targetSquash
+        }
+        this.targetLean = this.effectiveExpression === 'curious' ? 0.17 : 0
+      }
+      // In the free state the pet is a small physical body: release and hop
+      // velocities are integrated under gravity instead of being critically
+      // damped straight to the floor.
+      if (this.z > 0 || this.velocityZ > 0) {
+        this.velocityZ -= 900 * dt
+        this.z += this.velocityZ * dt
+        if (this.z <= 0) {
+          const impact = Math.abs(this.velocityZ)
+          this.z = 0
+          this.velocityZ = 0
+          this.velocitySquash -= Math.min(impact / 160, 3.4) * (0.3 + this.softness * 0.7)
+          if (impact > 12) this.setInteractionStatus('receiving', '稳稳落下')
+        }
       }
     }
+    ;[this.squash, this.velocitySquash] = spring(
+      this.squash,
+      this.velocitySquash,
+      squashTarget,
+      170 - this.softness * 70,
+      this.reducedMotion ? 30 : 16 - this.softness * 5,
+      dt,
+    )
+    ;[this.lean, this.velocityLean] = spring(this.lean, this.velocityLean, this.targetLean, 130, 17, dt)
+    ;[this.yaw, this.velocityYaw] = spring(this.yaw, this.velocityYaw, this.targetYaw, 60, 16, dt)
     this.gazeX += (this.targetGazeX - this.gazeX) * Math.min(1, dt * 6)
     this.gazeY += (this.targetGazeY - this.gazeY) * Math.min(1, dt * 6)
-    const eyeStyle = EYE_STYLE[status]
+    const eyeTarget = this.targetEyeStyle
+    const eyeLerp = Math.min(1, dt * 11)
+    this.eyeStyle = [
+      this.eyeStyle[0] + (eyeTarget[0] - this.eyeStyle[0]) * eyeLerp,
+      this.eyeStyle[1] + (eyeTarget[1] - this.eyeStyle[1]) * eyeLerp,
+      this.eyeStyle[2] + (eyeTarget[2] - this.eyeStyle[2]) * eyeLerp,
+      this.eyeStyle[3] + (eyeTarget[3] - this.eyeStyle[3]) * eyeLerp,
+    ]
     const blink = this.blinkValue(time)
-    this.draw(blink, eyeStyle, STATUS_COLOR[status])
-    this.lastDrawAt = time
+    this.draw(blink, this.eyeStyle, STATUS_COLOR[status])
     const moving =
       Math.abs(this.x - this.targetX) > 0.03 ||
       Math.abs(this.velocityX) > 0.05 ||
@@ -756,9 +1168,13 @@ export class WebGLPetRenderer implements PetRenderer {
       Math.abs(this.yaw - this.targetYaw) > 0.001 ||
       Math.abs(this.velocityYaw) > 0.001 ||
       Math.abs(this.gazeX - this.targetGazeX) + Math.abs(this.gazeY - this.targetGazeY) > 0.0002 ||
+      this.eyeStyle.some((value, index) => {
+        const target = eyeTarget[index]
+        return target !== undefined && Math.abs(value - target) > 0.0005
+      }) ||
+      (this.effectiveExpression === 'focus' && !this.reducedMotion && !this.gesture) ||
       this.blinkStartedAt > 0 ||
-      Boolean(this.gesture) ||
-      (!this.reducedMotion && (status === 'idle' || status === 'focus'))
+      Boolean(this.gesture)
     if (this.blinkStartedAt && time - this.blinkStartedAt > 260) this.blinkStartedAt = 0
     if (moving) this.raf = window.requestAnimationFrame(this.frame)
   }
@@ -785,6 +1201,9 @@ export class WebGLPetRenderer implements PetRenderer {
     const top = Math.max(0, Math.floor((centerY - this.unit * 1.8) * this.dpr))
     const bottom = Math.min(pixelHeight, Math.ceil((this.groundY + this.unit * 0.55) * this.dpr))
     gl.enable(gl.SCISSOR_TEST)
+    // All scissor coordinates are device-pixel coordinates. Keeping the
+    // lower edge in CSS pixels while left/right are scaled by DPR clips the
+    // returning pet to a small corner on Retina displays.
     gl.scissor(left, pixelHeight - bottom, Math.max(1, right - left), Math.max(1, bottom - top))
     gl.uniform2f(uniforms.resolution, pixelWidth, pixelHeight)
     gl.uniform2f(uniforms.center, this.x * this.dpr, centerY * this.dpr)
@@ -799,6 +1218,15 @@ export class WebGLPetRenderer implements PetRenderer {
     gl.uniform3fv(uniforms.statusColor, new Float32Array(statusColor))
     gl.uniform1f(uniforms.elevation, this.z / Math.max(this.unit, 1))
     gl.uniform4fv(uniforms.eyeStyle, new Float32Array(eyeStyle))
+    // Stretch the open/non-focus eyes vertically while keeping focus mode at
+    // the compact baseline height. This is a procedural scale in the shader,
+    // so it cannot introduce bitmap blur or disturb the body bounds.
+    // Keep the contrast obvious at the small resident size: idle/ambient eyes
+    // are visibly taller, while focus remains the compact baseline.
+    const eyeLength = this.effectiveExpression === 'focus'
+      ? 1.25
+      : this.effectiveExpression === 'calm' ? 1.85 : 1.65
+    gl.uniform1f(uniforms.eyeLength, eyeLength)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
     gl.disable(gl.SCISSOR_TEST)
   }

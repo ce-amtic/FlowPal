@@ -8,6 +8,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "check:markup": "tsx scripts/check-markup.ts"
+  },
   "dependencies": {
     "zod": "^4.0.0"
   },

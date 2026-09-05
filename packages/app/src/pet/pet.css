@@ -20,6 +20,23 @@ body,
   background: transparent;
 }
 
+#pet-root[data-presentation='teleport-out'] {
+  animation: flowpal-pet-teleport-out var(--dur-pet-depart) var(--ease) both;
+}
+
+#pet-root[data-presentation='teleport-in'] {
+  animation: flowpal-pet-teleport-in var(--dur-pet-teleport) cubic-bezier(.16,1,.3,1) both;
+  pointer-events: none;
+}
+
+#pet-root[data-presentation='floating-start'] {
+  animation: flowpal-pet-depart var(--dur-pet-depart) var(--ease) both;
+}
+
+#pet-root[data-presentation='floating-land'] {
+  animation: flowpal-pet-land var(--dur-pet-land) cubic-bezier(.16,1,.3,1) both;
+}
+
 body {
   color: var(--fg);
 }
@@ -32,7 +49,16 @@ body {
   height: 100%;
   touch-action: none;
   cursor: grab;
-  outline-offset: -4px;
+  /* The canvas is programmatically focused for pointer capture. Hide the
+     browser's rectangular focus ring; the mascot itself is the visible focus
+     affordance and the rectangle is especially distracting in the floating
+     transparent window. */
+  outline: none;
+}
+
+#pet:focus,
+#pet:focus-visible {
+  outline: none;
 }
 
 #pet:active {
@@ -68,8 +94,65 @@ body {
   white-space: nowrap;
 }
 
+.pet-hint {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  /* pet.html uses a 224px square canvas; anchor to its exact midpoint. */
+  left: 112px;
+  width: min(210px, calc(100% - 12px));
+  margin: 0;
+  padding: 7px 10px;
+  transform: translateX(-50%) translateY(-3px);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: var(--radius-box);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: var(--shadow-pet-hint);
+  color: var(--fg);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-pet-hint) ease, transform var(--dur-pet-hint) ease;
+}
+
+.pet-hint[data-visible='true'] {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 @media (prefers-reduced-motion: reduce) {
   #pet {
     cursor: default;
   }
+  #pet-root[data-presentation] { animation: none; }
+}
+
+@keyframes flowpal-pet-teleport-out {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  28% { opacity: 1; transform: translateY(-16px) scale(1.05); }
+  58% { opacity: .88; transform: translateY(0) scale(.95); }
+  100% { opacity: 0; transform: translateY(-10px) scale(.18); }
+}
+
+@keyframes flowpal-pet-teleport-in {
+  0% { opacity: 0; visibility: hidden; transform: translateY(5px) scaleX(.72) scaleY(.82); }
+  1% { opacity: 0; visibility: visible; transform: translateY(5px) scaleX(.72) scaleY(.82); }
+  24% { opacity: 1; visibility: visible; transform: translateY(0) scaleX(1.06) scaleY(.95); }
+  58% { opacity: 1; transform: translateY(-1px) scaleX(.98) scaleY(1.01); }
+  100% { opacity: 1; transform: translateY(0) scaleX(1) scaleY(1); }
+}
+
+@keyframes flowpal-pet-depart {
+  0% { opacity: 1; transform: scale(1); }
+  34% { opacity: 1; transform: scale(.96); }
+  100% { opacity: 0; transform: scale(.08); }
+}
+
+@keyframes flowpal-pet-land {
+  0% { opacity: 1; transform: translateY(-3px) scaleX(.99) scaleY(1.01); }
+  38% { opacity: 1; transform: translateY(2px) scaleX(1.06) scaleY(.95); }
+  68% { opacity: 1; transform: translateY(-1px) scaleX(.98) scaleY(1.01); }
+  100% { opacity: 1; transform: translateY(0) scaleX(1) scaleY(1); }
 }

@@ -70,6 +70,7 @@
   --text-lead: 16px;
   --text-title: 20px;
   --text-display: 24px;
+  --text-clock: 40px;           /* 专注的倒计时。全 App 唯一要在几米外扫一眼的数字 */
   --leading: 1.6;
   --leading-tight: 1.35;        /* 标题与单行 */
 
@@ -78,6 +79,12 @@
   --dur-base: 220ms;            /* 切换、展开、条目进出 */
   --dur-slow: 400ms;            /* 形象、整块转场 */
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* 桌宠专用转场时长。桌宠 CSS 使用这些变量；缺失时 animation
+     shorthand 会整体失效，导致入场/离场看起来像瞬移。 */
+  --dur-pet-depart: 280ms;
+  --dur-pet-teleport: 360ms;
+  --dur-pet-land: 260ms;
+  --dur-pet-hint: 120ms;
   /* 循环指示器（转圈）。它不是转场，所以不在上面三档里，也不镜像进 motion.ts */
   --dur-spin: 1000ms;
 
@@ -85,6 +92,7 @@
   --titlebar-h: 44px;
   --content-max: 620px;
   --traffic-lights-w: 76px;     /* 红绿灯占位，导航从这儿之后开始 */
+  --window-controls-w: 140px;   /* Windows 右上角那三个按钮的覆盖层 */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -131,6 +139,10 @@
     --dur-fast: 1ms;
     --dur-base: 1ms;
     --dur-slow: 1ms;
+    --dur-pet-depart: 1ms;
+    --dur-pet-teleport: 1ms;
+    --dur-pet-land: 1ms;
+    --dur-pet-hint: 1ms;
     /* 转圈不归零：它是「正在做事」的唯一提示，停下来等于没有反馈。放慢即可 */
     --dur-spin: 2400ms;
   }

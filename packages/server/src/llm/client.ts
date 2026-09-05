@@ -1,5 +1,17 @@
 import OpenAI from 'openai'
-import type { ModelConfig } from '../config.ts'
+import type { Effort, ModelConfig } from '../config.ts'
+
+/**
+ * 这一次请求要带的供应商字段：恒定的那些，加上这一档要加的那些。
+ *
+ * 顺序是「恒定在前、档位在后」，所以某一档可以覆盖恒定项——比如平时关思考，
+ * 唯独改库那条把它打开。
+ *
+ * 配置里没写 effort 表就等于没有强度控制，这时三个档位一视同仁。
+ */
+function paramsFor(model: ModelConfig, effort: Effort): Record<string, unknown> {
+  return { ...model.params, ...(model.effort?.[effort] ?? {}) }
+}
 
 /**
  * 供应商是配置不是代码路径：换一家是改 config.local.json 里的三个字段，不是改代码。
@@ -20,6 +32,8 @@ export type JsonCall = {
   schemaName: string
   /** z.toJSONSchema 产物；给 null 表示这次调用不需要结构化输出。 */
   jsonSchema: unknown
+  /** 这一次要多少思考。由调用点决定：要快的给 none，要稳的给 low 或 high。 */
+  effort: Effort
 }
 
 export async function callJson(model: ModelConfig, call: JsonCall): Promise<unknown> {
@@ -41,6 +55,26 @@ export async function callJson(model: ModelConfig, call: JsonCall): Promise<unkn
       JSON.stringify(call.jsonSchema)
     return attempt(client, model, call, { type: 'json_object' }, systemWithSchema)
   }
+}
+
+/**
+ * 每次调用打一行用量，重点是前缀缓存命中了多少。
+ *
+ * 不打就只能猜：上下文怎么排对缓存友不友好，是个可以量的问题，而在量到之前
+ * 所有关于它的说法都是编的。DeepSeek 在 usage 里给 prompt_cache_hit_tokens /
+ * prompt_cache_miss_tokens；别的供应商没有这两个字段时只打总数。
+ */
+function logUsage(label: string, usage: OpenAI.CompletionUsage | undefined): void {
+  if (!usage) return
+  const u = usage as OpenAI.CompletionUsage & {
+    prompt_cache_hit_tokens?: number
+    prompt_cache_miss_tokens?: number
+  }
+  const hit = u.prompt_cache_hit_tokens
+  const cache = hit === undefined
+    ? ''
+    : ` 缓存命中 ${hit}/${usage.prompt_tokens}（${Math.round(hit / Math.max(usage.prompt_tokens, 1) * 100)}%）`
+  console.log(`[llm ${label}] 入 ${usage.prompt_tokens} 出 ${usage.completion_tokens}${cache}`)
 }
 
 function isResponseFormatUnavailable(e: unknown): boolean {
@@ -75,11 +109,18 @@ export type AgentCallResult = {
  */
 export async function callAgent(
   model: ModelConfig,
-  call: { messages: OpenAI.Chat.ChatCompletionMessageParam[]; tools: AgentToolSpec[] },
+  call: {
+    messages: OpenAI.Chat.ChatCompletionMessageParam[]
+    tools: AgentToolSpec[]
+    /** 改库这条路要多想一会儿——错了不好收回，几秒钟换稳当是划算的 */
+    effort: Effort
+  },
 ): Promise<AgentCallResult> {
   const client = new OpenAI({ baseURL: model.baseUrl, apiKey: model.apiKey })
   const res = await client.chat.completions.create({
     model: model.model,
+    // 供应商专属字段原样透传，见 ModelConfig.params
+    ...paramsFor(model, call.effort),
     messages: call.messages,
     tools: call.tools.map((t) => ({
       type: 'function' as const,
@@ -92,6 +133,8 @@ export async function callAgent(
     })),
     tool_choice: 'auto',
   })
+
+  logUsage('agent', res.usage)
 
   const msg = res.choices[0]?.message
   const toolCalls: AgentToolCall[] = []
@@ -118,12 +161,16 @@ async function attempt(
 
   const res = await client.chat.completions.create({
     model: model.model,
+    // 供应商专属字段原样透传，见 ModelConfig.params
+    ...paramsFor(model, call.effort),
     messages: [
       { role: 'system', content: system },
       { role: 'user', content },
     ],
     response_format: responseFormat,
   })
+
+  logUsage(call.schemaName, res.usage)
 
   const text = res.choices[0]?.message?.content
   if (!text) throw new Error(`模型没有返回内容：${JSON.stringify(res.choices[0])}`)

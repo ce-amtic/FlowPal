@@ -1,10 +1,23 @@
-/* 形象、问候、精力自上而下三行，左对齐 */
+/*
+ * 这一页的竖向节奏按亲疏分四档，不是一路等距：
+ *   4px  标题与它的副标题
+ *   8px  同一组里的相邻行
+ *   20px 组与组之间（卡片内）
+ *   40px 大块之间
+ * 全都一样宽的话，读到的是一摞并列的东西，而不是几组有主次的东西。
+ *
+ * 形象、问候、精力自上而下三行，左对齐。
+ */
 .now-head {
   position: relative;
-  margin: 0 0 var(--space-8);
+  margin: 0 0 var(--space-10);
 }
 
-.now-greeting { margin-top: var(--space-3); }
+/*
+ * 不给间距：形象的画布下缘本来就有一截空（接触阴影之外还有余量），
+ * 那一截就是这里的留白。再加边距，形象和问候之间会断开成两块。
+ */
+.now-greeting { margin-top: 0; }
 
 .greeting {
   margin: 0;
@@ -28,7 +41,7 @@
 
 /* 模型对处境的那一句判断，问候语的副标题。它有凭据，所以它读得清 */
 .energy {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-1) 0 0;
   color: var(--fg-dim);
 }
 
@@ -37,7 +50,7 @@
  * 别处再堆卡片，这一张就不再意味着「就这一件」。
  */
 .now-card {
-  padding: var(--space-6);
+  padding: var(--space-5);
   border-radius: var(--radius-box);
   background: var(--card);
   box-shadow: var(--card-shadow);
@@ -46,7 +59,7 @@
 /* 事情的名字。小字、弱色：它是上下文，不是这一屏要读的那句 */
 .now-title {
   display: inline-block;
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
   color: var(--fg-dim);
   font-size: var(--text-aux);
   text-decoration: none;
@@ -63,16 +76,18 @@
   line-height: var(--leading-tight);
 }
 
+/* 名字、这一步、为什么是同一句话的三行，所以彼此贴着 */
 .now-reason {
-  margin: var(--space-3) 0 0;
+  margin: var(--space-2) 0 0;
   color: var(--fg-dim);
 }
 
+/* 动作是另一回事，和上面那三行之间要断开 */
 .now-actions {
   display: flex;
   align-items: center;
   gap: var(--space-5);
-  margin-top: var(--space-6);
+  margin-top: var(--space-5);
 }
 
 button.primary {
@@ -97,7 +112,7 @@ button.primary:hover { opacity: 0.88; }
  * 一起，读到的是「先填这个，再点那个」。
  */
 .composer {
-  margin: var(--space-8) 0 0;
+  margin: var(--space-10) 0 0;
   padding: var(--space-3);
   border-radius: var(--radius-box);
   background: var(--field);
@@ -143,17 +158,78 @@ button.primary:hover { opacity: 0.88; }
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-3);
   margin-top: var(--space-2);
 }
 
-.composer-note {
-  margin-right: auto;
+/* ── 回执 ───────────────────────────────────────────────── */
+
+/*
+ * 投进去之后要看得见变成了什么。原来是一行 12px 弱字、几秒后消失，而抽出的条目
+ * 散进了日程与项目——人在这一页上什么都看不到，等于扔进去就没了。
+ *
+ * 它只显示最近一次，开始写下一条就让位，所以不会长成一条对话流。
+ */
+/*
+ * 回执现在可能是一整段答案，长度没有上限。这个框钉在窗口底部、向上长，所以不封顶
+ * 的话它会长过整屏，把「接下来」连同它上面的一切都盖住——而那一段正是「剩下的
+ * 没丢」的凭据。封在四成屏高，超出的部分自己滚。
+ */
+.receipt {
+  overflow: hidden;
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: var(--space-3);
+}
+
+.receipt-line {
+  margin: 0;
   color: var(--fg-dim);
   font-size: var(--text-aux);
 }
 
-.composer-failed { color: var(--danger); }
+.receipt-failed { color: var(--danger); }
+
+.receipt-items {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+}
+
+.receipt-items li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+
+.receipt-items a {
+  color: var(--fg);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.receipt-items a:hover { color: var(--accent); }
+
+.receipt-tag { color: var(--accent); font-size: var(--text-aux); }
+
+/* 等待要好几秒，一行不动的字看起来像卡住了 */
+.dots { display: inline-flex; gap: var(--space-1); margin-left: var(--space-2); }
+
+.dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  animation: blip var(--dur-spin) ease-in-out infinite;
+}
+
+.dots i:nth-child(2) { animation-delay: calc(var(--dur-spin) / 6); }
+.dots i:nth-child(3) { animation-delay: calc(var(--dur-spin) / 3); }
+
+@keyframes blip {
+  0%, 60%, 100% { opacity: 0.25; }
+  30% { opacity: 1; }
+}
 
 /* 比那颗「开始」小一号：记录是随手的动作，不是这一屏的主张 */
 .composer-send {
@@ -165,7 +241,7 @@ button.primary:hover { opacity: 0.88; }
 
 /* ── 接下来 ─────────────────────────────────────────────── */
 
-.upcoming { margin-top: var(--space-8); }
+.upcoming { margin-top: var(--space-10); }
 
 /* 通向日程的那一行，语气要比条目更轻——它不是一件事 */
 .row-more { color: var(--fg-dim); font-size: var(--text-aux); }

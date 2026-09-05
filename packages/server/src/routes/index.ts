@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { Calendar, Run } from '@flowpal/shared'
@@ -10,7 +10,9 @@ import {
   createCtx, nowInShanghai, FragmentSource, RawType, NowOutput, nowJsonSchema,
   EndFocusRequest, SettingsPatch, StartFocusRequest, SyncRunRequest,
 } from '@flowpal/shared'
+import { NowChoice } from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
+import { newId } from '../store/db.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
 import {
   addItemCitations, addItemSource, getItem, insertItem, itemHistory, listItems, updateItemFields,
@@ -38,6 +40,7 @@ import {
   type RucSyncRequest,
 } from '../sync/runner.ts'
 import { ExternalShapeError, UnsupportedExternalSourceError } from '../sync/types.ts'
+import { getSetting, setSetting } from '../store/settings.ts'
 import { extract } from '../pipeline/extract.ts'
 import { mapStructured } from '../pipeline/map-structured.ts'
 import { buildContext } from '../context/build.ts'
@@ -244,7 +247,12 @@ export function createRoutes(
   app.get('/api/settings', (c) => {
     const settings = getSettings(db, config)
     return c.json({
-      settings,
+      settings: {
+        ...settings,
+        chronotype_workday_wake: settings.chronotype.workdayWakeTime,
+        chronotype_restday_wake: settings.chronotype.freeDayWakeTime,
+        onboarded_at: getSetting(db, 'onboarded_at'),
+      },
       sync: getSyncStatus(db, config, settings.ruc.authorized, Boolean(dependencies.rucBroker)),
     })
   })
@@ -466,16 +474,39 @@ export function createRoutes(
         user: context.formatted,
         schemaName: 'now_output',
         jsonSchema: nowJsonSchema(),
+        // 这一页是首屏，人正等着它出来。而且这里量过：关掉思考，梯子反而更准。
+        effort: 'none',
       })
-      const parsed = NowOutput.safeParse(raw)
-      if (!parsed.success) {
-        throw new Error(`「此刻」输出不符合契约：${JSON.stringify(parsed.error.issues)}`)
+      /*
+       * 逐项验，不整份验。
+       *
+       * 观测到的失败：模型偶尔在某个 alternate 上漏掉 steps，三次里约一次。整份
+       * 校验是全有或全无，于是「此刻」整页退成空态——首屏因为一个次要候选而空白。
+       * alternates 为空本来就是合法形状，扔掉坏的不破坏契约；为了它扔掉写对了的
+       * primary 才破坏。primary 自己不合契约仍然走空态，那是真没有可推的。
+       *
+       * 送给模型的 json_schema 仍然是完整的 NowOutput，要求没有放松，放松的只是
+       * 收到坏输出时的处置。
+       */
+      const shell = raw as Partial<Record<keyof NowOutput, unknown>>
+      const primary = NowChoice.safeParse(shell.primary)
+      if (!primary.success) {
+        throw new Error(`「此刻」的 primary 不符合契约：${JSON.stringify(primary.error.issues)}`)
       }
+      const candidates = Array.isArray(shell.alternates) ? shell.alternates : []
+      const alternates = candidates
+        .map((a) => NowChoice.safeParse(a))
+        .filter((r) => r.success)
+        .map((r) => r.data)
+      if (alternates.length !== candidates.length) {
+        console.warn(`「此刻」丢弃了 ${candidates.length - alternates.length} 个不合契约的候选`)
+      }
+
       const payload = {
-        primary: parsed.data.primary,
-        alternates: parsed.data.alternates,
-        energy: parsed.data.energy_reading || null,
-        basis: parsed.data.basis,
+        primary: primary.data,
+        alternates,
+        energy: typeof shell.energy_reading === 'string' ? shell.energy_reading || null : null,
+        basis: Array.isArray(shell.basis) ? shell.basis.filter((b) => typeof b === 'string') : [],
       }
       setNowCache(db, ctx, JSON.stringify(payload))
       return c.json(payload)
@@ -542,6 +573,31 @@ export function createRoutes(
     }
   })
 
+  /**
+   * 应用设置。首次启动的向导与设置页写这里，buildContext 从这里读作息。
+   *
+   * 键是白名单：设置是给人填的少数几项，不是一个任人写的键值仓库；写错一个键
+   * 不会报错、只会让读它的那一侧永远读到空，而那种错很难被发现。
+   */
+  const SETTING_KEYS = ['chronotype_workday_wake', 'chronotype_restday_wake', 'onboarded_at'] as const
+
+  app.patch('/api/settings', async (c) => {
+    const ctx = ctxOf()
+    const body = z.record(z.string(), z.string()).safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '设置参数不对', issues: body.error.issues }, 400)
+
+    const unknown = Object.keys(body.data).filter((k) => !SETTING_KEYS.includes(k as never))
+    if (unknown.length > 0) return c.json({ error: `没有这些设置项：${unknown.join(', ')}` }, 400)
+
+    for (const [key, value] of Object.entries(body.data)) setSetting(db, ctx, key, value)
+    // 作息变了，「此刻」的判断依据就变了，那份缓存不再作数
+    clearNowCache(db)
+    broadcastChanged(ctx.now)
+    return c.json({
+      settings: Object.fromEntries(SETTING_KEYS.map((k) => [k, getSetting(db, k)])),
+    })
+  })
+
   /** 想法页：倒序的流，既没有时间也不属于项目。 */
   app.get('/api/thoughts', (c) => c.json({
     thoughts: listItems(db).filter((i) => i.type === 'thought' && i.status === 'active'),
@@ -551,6 +607,30 @@ export function createRoutes(
   app.get('/api/confirmations', (c) => {
     const items = listItems(db).filter((i) => i.status === 'needs_confirm')
     return c.json({ items, count: items.length })
+  })
+
+  // ── 图片落盘 ────────────────────────────────────────────────────────
+  /**
+   * 粘贴进来的截图只有字节，没有磁盘路径，而碎片存的是路径。先落到库目录里，
+   * 把绝对路径回给调用方，它再拿去发 POST /api/fragments。
+   *
+   * 拖进来的文件不走这里：它本来就在磁盘上，直接给路径即可，不必再搬一份。
+   */
+  const BlobBody = z.object({
+    contentType: z.string().regex(/^image\/(png|jpeg|webp|gif)$/),
+    base64: z.string().min(1),
+  })
+
+  app.post('/api/blobs', async (c) => {
+    const parsed = BlobBody.safeParse(await c.req.json())
+    if (!parsed.success) {
+      return c.json({ error: '图片参数不对', issues: parsed.error.issues }, 400)
+    }
+    const dir = join(config.dataDir, 'blobs')
+    mkdirSync(dir, { recursive: true })
+    const path = join(dir, `${newId('blob')}.${parsed.data.contentType.slice('image/'.length)}`)
+    writeFileSync(path, Buffer.from(parsed.data.base64, 'base64'))
+    return c.json({ path }, 201)
   })
 
   // ── 专注时段（B 的 /focus 写这里） ───────────────────────────────────
@@ -572,6 +652,9 @@ export function createRoutes(
       return c.json({ error: '专注参数不对', issues: parsed.error.issues }, 400)
     }
     const session = insertFocusSession(db, ctx, parsed.data)
+    // 一次专注是处境的一部分，尤其是「下次继续」。不清缓存的话下一次「此刻」
+    // 还是刚才那一份判断，那件没做完的事永远排不到前面。
+    clearNowCache(db)
     broadcastChanged(ctx.now)
     return c.json({ session }, 201)
   })

@@ -1,0 +1,78 @@
+/*
+ * 首次启动。整窗一屏，没有标题栏导航——这时候还没有东西可导航。
+ *
+ * 竖向居中而不是贴顶：这一屏只有一件事要做，居中的东西读起来像被端到面前，
+ * 贴顶的东西读起来像一份要填的表。
+ */
+.welcome {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  padding: var(--space-10) var(--space-8);
+  text-align: center;
+  -webkit-app-region: drag;
+}
+
+/* 拖动区里的可点元素必须显式退出，否则点不动 */
+.welcome button { -webkit-app-region: no-drag; }
+
+/* 形象从大缩到小，是这一屏唯一的转场：它先出场，然后让位给问题 */
+.welcome-figure { display: flex; }
+
+.welcome-panel {
+  width: min(var(--content-max), 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.welcome-step {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+.welcome-title {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+.welcome-lead {
+  margin: 0;
+  max-width: 34em;
+  color: var(--fg-dim);
+  line-height: var(--leading);
+}
+
+.welcome-go {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-10);
+}
+
+.welcome-aside {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+/* 选项本身长什么样在 shell.css 里，和设置页共用一份。这里只管这一屏的排法 */
+.welcome-choices {
+  justify-content: center;
+  margin-top: var(--space-2);
+}
+
+/*
+ * 这一屏上它是主角：比在设置页里大一号，字也是正常颜色。在设置页里它是一排
+ * 待选项，灰一点正好；在这里它是唯一要做的动作，灰着就没分量了。
+ */
+.welcome-choices .choice {
+  padding: var(--space-3) var(--space-5);
+  color: var(--fg);
+  font-size: var(--text-lead);
+}

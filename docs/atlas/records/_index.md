@@ -16,7 +16,7 @@
 - **003** [[003-product-form-open|产品形态未定：陪伴与规划如何融合、陪伴形象是什么、主界面长什么样]] — 2026-09-04 — answered by 009; tags: bootstrap, product; cited by 2
 - **004** [[004-multi-device-sync-open|多设备同步走什么机制]] — 2026-09-04 — answered by 006; tags: bootstrap, collection; cited by 1
 
-## Decisions (12)
+## Decisions (13)
 
 - **001** [[001-fragment-immutable-item-derived-with-citations|原始碎片不可变永不删除，条目派生可改，每个字段带原文引用]] — 2026-09-04 — tags: bootstrap, collection; cited by 4
 - **002** [[002-llm-tone-present-not-judging|LLM 回应语气：在场而不评判，说中具体细节，不责备不催不谈意志力]] — 2026-09-04 — tags: bootstrap, companion; cited by 3
@@ -25,8 +25,9 @@
 - **007** [[007-extraction-contract|抽取契约：一份 zod schema 同时当 structured output、类型与校验，引用逐字可验]] — 2026-09-05 — tags: collection, architecture; cited by 3
 - **009** [[009-companion-capability-subset|桌宠与主窗口分量相等：能力是子集，交互形式可独有]] — 2026-09-05 — tags: product, companion; cited by 3
 - **010** [[010-project-layer-above-items|条目之上加一层项目：长期追踪与进度的挂载点]] — 2026-09-05 — tags: product, collection; cited by 2
-- **013** [[013-context-is-a-query|处境是一个查询，不是一份画像存储；精力给事实不给数]] — 2026-09-05 — tags: product, architecture; cited by 2
-- **014** [[014-no-progress-tracking|不做进度追踪：收缩成完成状态与「多久没动」]] — 2026-09-05 — tags: product, collection
+- **013** [[013-context-is-a-query|处境是一个查询，不是一份画像存储；精力给事实不给数]] — 2026-09-05 — tags: product, architecture; cited by 3
+- **014** [[014-no-progress-tracking|不做进度追踪：收缩成完成状态与「多久没动」]] — 2026-09-05 — tags: product, collection; cited by 1
 - **016** [[016-agent-loop-single-write-mechanism|写入库的唯一机制是一个 agent 循环：抽取与合并合一，MergePlan 作废]] — 2026-09-05 — tags: collection, architecture; cited by 1
 - **017** [[017-agent-output-is-receipt|Agent 的输出是回执不是结果；进行中播对象，不播步骤]] — 2026-09-05 — tags: product, companion
 - **020** [[020-avatar-is-decoration-in-main-window|形象在主窗口是装饰，不承担任何功能入口]] — 2026-09-05 — tags: companion, product
+- **021** [[021-focus-end-buttons-target-the-item|专注结束的两个按钮是关于那件事，不是关于这段时间]] — 2026-09-05 — tags: product, architecture

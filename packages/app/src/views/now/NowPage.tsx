@@ -7,7 +7,8 @@ import { api, queryKeys } from '../../api.ts'
 import { ICON } from '../../tokens/icons.ts'
 import { transition } from '../../tokens/motion.ts'
 import { ErrorState, Loading } from '../../shell/State.tsx'
-import { Pebble } from '../../pebble/Pebble.tsx'
+import { PetHost } from '../../pet/PetHost.tsx'
+import { usePetStatus } from '../../pet/context.tsx'
 import { daysBetween, formatAt, formatDay, formatDue } from '../../lib/format.ts'
 import { Composer } from './Composer.tsx'
 import './now.css'
@@ -22,6 +23,8 @@ import './now.css'
  * 重新调模型，所以它不在动作行里，在页面右上角。
  */
 export function NowPage() {
+  const { setStatus: setPetStatus } = usePetStatus()
+  useEffect(() => { setPetStatus('idle') }, [setPetStatus])
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.now,
     queryFn: api.getNow,
@@ -32,8 +35,11 @@ export function NowPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  // 标题栏那个加号把焦点一起带过来，省掉一次点击
-  const focusComposer = useLocation().state?.focusComposer === true
+  // 标题栏那个加号、以及全局快捷键，把焦点一起带过来，省掉一次点击
+  const navState = useLocation().state
+  const focusComposer = navState?.focusComposer === true
+  // 拖进窗口的图片。壳把路径带到这里，由记录框提交并显示回执
+  const droppedPaths = navState?.droppedPaths as string[] | undefined
 
   // 记录框钉在底部时脱离布局，正文末尾要留出它那么高的空，否则最后一行被压住
   const [composerHeight, setComposerHeight] = useState(0)
@@ -63,7 +69,7 @@ export function NowPage() {
         : undefined}
     >
       <header className="now-head">
-        <Pebble size={128} />
+        <PetHost size={128} />
         <div className="now-greeting">
           <p className="greeting">{greeting()}</p>
           {/*
@@ -120,10 +126,18 @@ export function NowPage() {
           <motion.p layout="position" className="now-reason">{candidate.reason}</motion.p>
 
           <motion.div layout="position" className="now-actions">
+            {/*
+              带过去的是屏幕上此刻这一步，不是第一步——按过「更小的一步」之后，
+              专注屏上还写着原来那句就等于那几下白按了。
+            */}
             <button
               className="primary"
-              onClick={() => navigate(`/focus?item=${encodeURIComponent(candidate.itemId)}`)}
-            >开始</button>
+              onClick={() => navigate('/focus', {
+                state: { focus: { itemId: candidate.itemId, title: candidate.title, step } },
+              })}
+            >
+              开始
+            </button>
             {hasSmaller && (
               <button className="quiet" onClick={() => setStepIndex((i) => i + 1)}>
                 更小的一步
@@ -146,6 +160,7 @@ export function NowPage() {
         autoFocus={focusComposer}
         floating={isLoading || candidate !== undefined}
         onHeight={setComposerHeight}
+        droppedPaths={droppedPaths}
       />
 
       <Upcoming />

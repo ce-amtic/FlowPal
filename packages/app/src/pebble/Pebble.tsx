@@ -15,6 +15,8 @@ export function Pebble({ size = 128, mood = 'calm' }: { size?: number; mood?: Mo
   const canvas = useRef<HTMLCanvasElement>(null)
   const moodRef = useRef<Mood>(mood)
   moodRef.current = mood
+  /* 循环平时是停的，换了表情没有任何东西会自己把它叫醒，得从外面推一下 */
+  const wakeRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     const el = canvas.current
@@ -132,6 +134,7 @@ export function Pebble({ size = 128, mood = 'calm' }: { size?: number; mood?: Mo
       if (document.hidden) { cancelAnimationFrame(frame); frame = 0 } else wake()
     }
 
+    wakeRef.current = wake
     wake()
     scheduleBlink()
     window.addEventListener('pointermove', onPointer)
@@ -140,6 +143,7 @@ export function Pebble({ size = 128, mood = 'calm' }: { size?: number; mood?: Mo
     dark.addEventListener('change', wake)
 
     return () => {
+      wakeRef.current = null
       cancelAnimationFrame(frame)
       clearTimeout(blinkTimer)
       window.removeEventListener('pointermove', onPointer)
@@ -151,6 +155,9 @@ export function Pebble({ size = 128, mood = 'calm' }: { size?: number; mood?: Mo
       // 画布随组件一起从 DOM 里走，上下文交给 GC。
     }
   }, [size])
+
+  // 眼形是逐帧插值过去的，所以这里只要把循环叫醒，转场本身是免费的
+  useEffect(() => { wakeRef.current?.() }, [mood])
 
   return (
     <canvas

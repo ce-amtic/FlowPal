@@ -1,69 +1,196 @@
-.focus-page {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 34px 6px 48px;
+/*
+ * 专注是模式不是页：整窗换一副样子，没有导航条，一屏只有一件事。
+ *
+ * 竖向居中，和首次启动那一屏同一套：这时候屏幕上没有第二件可做的事，
+ * 贴顶反而像一份还没填完的表。
+ */
+.focus {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-10) var(--space-8);
+  text-align: center;
+  -webkit-app-region: drag;
 }
 
-.focus-page .eyebrow {
-  margin: 0 0 8px;
-  color: var(--accent);
-  font-size: 12px;
-  letter-spacing: .08em;
-}
+/* 拖动区里的可点元素必须显式退出，否则点不动 */
+.focus button, .focus a, .focus textarea { -webkit-app-region: no-drag; }
 
-.focus-page h1 {
-  max-width: 520px;
-  margin: 0;
-  font-size: clamp(24px, 5vw, 36px);
+/*
+ * 事情的名字是这一屏的主体——这一段属于它。那一步跟在下面一行，是进门的方式，
+ * 不是这一段的内容。「此刻」上两者的大小是反过来的，因为在那一页门还没进。
+ */
+.focus-title {
+  margin: var(--space-5) 0 var(--space-1);
+  font-size: var(--text-display);
   font-weight: 500;
-  line-height: 1.3;
+  line-height: var(--leading-tight);
 }
 
-.focus-subtitle,
-.summary-copy,
-.focus-meta {
+/* 退场时高度收到零，所以要裁剪：否则字会在收拢的框外面露一截 */
+.focus-step {
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg-dim);
+  line-height: var(--leading-tight);
+}
+
+/* 下面这一块是另一回事——先定多久、再走计时、最后收尾，所以断开 */
+.focus-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: var(--space-10);
+}
+
+/* ── 时长 ─────────────────────────────────────────────── */
+
+/*
+ * 颜色沿着轨走：同一个强调色，从最淡走到最实。不引入第二个色系——那会让这一屏
+ * 看起来是别的产品做的。
+ *
+ * 最淡的一头也保留三成强调色：纯灰的数字在五分钟那一端会读不清，而那一端恰恰
+ * 是最该被读清的选择。
+ */
+.dial {
+  /* 长宽比要一眼是「一条可以拨的量」，不能是一个开关。九比一左右 */
+  --dial-h: 44px;
+  --dial-hue: color-mix(
+    in oklab,
+    var(--accent) calc(30% + 70% * var(--dial-at)),
+    var(--fg-faint)
+  );
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /*
+   * 定宽而不是 min(400px, 100%)：外面那一列是按内容收缩的，百分比在里面解不出来，
+   * 结果整条只有内容那么宽。
+   */
+  width: 400px;
+  max-width: 100%;
+}
+
+.dial-value {
+  margin: 0 0 var(--space-4);
+  color: var(--dial-hue);
+  font-size: var(--text-clock);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.dial-unit {
+  margin-left: var(--space-2);
+  color: var(--fg-dim);
+  font-size: var(--text-lead);
+}
+
+/*
+ * 没有滑块。整条就是一块可以拨的东西，走过的那一段本身就是位置——一颗小圆点
+ * 骑在细线上是「设置项」的样子，这一屏不是在设置什么，是在拨一个量。
+ *
+ * 抓住时整条微微长高，这是唯一的反馈，也是它唯一需要的反馈。
+ */
+.dial-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: var(--dial-h);
+  border-radius: var(--radius-pill);
+  background: none;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.dial-range:active { transform: scaleY(1.08); }
+
+.dial-range:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.dial-range::-webkit-slider-runnable-track {
+  height: var(--dial-h);
+  border-radius: var(--radius-pill);
+  background-color: var(--field);
+  /* 走过的那一段把渐变露出来，越拨越实 */
+  background-image: linear-gradient(
+    to right,
+    color-mix(in oklab, var(--accent) 30%, var(--fg-faint)),
+    var(--accent)
+  );
+  /*
+   * 最短的那一档也留一个满高的圆头。一条空轨读起来像什么都没选，而五分钟
+   * 是实实在在的一个选择。
+   */
+  background-size: calc(var(--dial-h) + (100% - var(--dial-h)) * var(--dial-at)) 100%;
+  background-repeat: no-repeat;
+}
+
+/* 滑块留 1px 且不可见：拖动要有东西可抓，但看得见的只有那一段渐变 */
+.dial-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1px;
+  height: var(--dial-h);
+  opacity: 0;
+}
+
+.focus-go { margin-top: var(--space-6); }
+
+/*
+ * 时钟。等宽数字，否则每一秒整行都在轻微地左右挪，那正是这一屏最不该有的动静。
+ */
+.focus-clock {
+  margin: 0;
+  font-size: var(--text-clock);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+}
+
+/* 结束是随时可做的事，不是这一屏在催的事，所以它是次要分量 */
+.focus-stop { margin-top: var(--space-5); }
+
+.focus-end-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+/* 简报。它是这一段的回执，不是一份清单，所以不长成别处那种可点的行 */
+.focus-jotted {
+  margin-top: var(--space-10);
+  width: min(var(--content-max), 100%);
+}
+
+.focus-jotted .group-label { margin-bottom: var(--space-2); }
+
+.focus-jotted-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   color: var(--fg-dim);
 }
 
-.focus-subtitle { max-width: 460px; margin: 14px 0 0; }
+.focus-jotted-list li + li { margin-top: var(--space-2); }
 
-.focus-clock {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: 48px 0 30px;
+/*
+ * 记录框钉在窗口底部，不进居中的那一列——它是随时能用的东西，不该把
+ * 正在做的那件事往上顶。
+ */
+.focus-composer {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-5);
+  transform: translateX(-50%);
+  width: min(var(--content-max), calc(100% - var(--space-12)));
+  -webkit-app-region: no-drag;
 }
 
-.focus-clock strong {
-  color: var(--fg);
-  font-size: clamp(38px, 10vw, 68px);
-  font-weight: 400;
-  letter-spacing: -.04em;
+.focus-composer .composer {
+  margin: 0;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
 }
-
-.focus-clock span { color: var(--fg-dim); }
-
-.focus-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
-
-.focus-actions button {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  padding: 9px 18px;
-  background: var(--field);
-  color: var(--fg);
-  font: inherit;
-  cursor: pointer;
-}
-
-.focus-actions button.primary {
-  border-color: transparent;
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.focus-actions button:disabled { cursor: wait; opacity: .48; }
-.focus-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-
-.focus-meta { margin-top: 18px; font-size: 12px; }
-.focus-error { margin: 18px 0 0; color: var(--danger-strong); white-space: pre-wrap; }
-.focus-summary .summary-time { margin: 34px 0 0; font-size: 42px; color: var(--accent); }

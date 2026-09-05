@@ -99,6 +99,32 @@ export type FocusEndInput = {
   outcome: 'done' | 'continue' | 'early_end'
   actualMinutes?: number | null
 }
+/**
+ * 应用设置。键由服务端白名单，写错的键会被 400 挡回来。
+ *
+ * 作息两问的出处是 MCTQ 那两道题，`buildContext` 读它们；没填时「此刻」只能拿到
+ * 「作息时间未知（先验，猜的）」。`onboarded_at` 有值就表示向导走完了。
+ */
+export type Settings = SettingsPublic & {
+  chronotype_workday_wake: string | null
+  chronotype_restday_wake: string | null
+  onboarded_at: string | null
+}
+
+/**
+ * 一次专注时段。四个数在时段结束时一次写入：开始时刻、计划时长、实际时长、
+ * 是否提前结束。「下次继续」就是 endedEarly。
+ *
+ * `startedAt` 用 `nowInShanghai()` 那种带 +08:00 的写法，和库里其余时刻同一套——
+ * 发 UTC 的话，凌晨那几个小时的时段会被算进前一天。
+ */
+export type NewFocusSession = {
+  startedAt: string
+  plannedMinutes: number
+  actualMinutes: number
+  endedEarly: boolean
+  itemId: string | null
+}
 
 export type Api = {
   listItems: () => Promise<{ items: ItemWithSources[] }>
@@ -125,7 +151,7 @@ export type Api = {
   listFocusSessions: () => Promise<{ sessions: FocusSession[] }>
   startFocus: (input: FocusStartInput) => Promise<{ session: FocusSession }>
   endFocus: (id: string, input: FocusEndInput) => Promise<FocusResponse>
-  getSettings: () => Promise<{ settings: SettingsPublic; sync: SyncStatus }>
+  getSettings: () => Promise<{ settings: Settings; sync: SyncStatus }>
   saveSettings: (patch: SettingsPatch) => Promise<{ settings: SettingsPublic; sync: SyncStatus }>
   getSyncStatus: () => Promise<{ status: SyncStatus }>
   runSync: (
@@ -133,6 +159,15 @@ export type Api = {
     mode?: 'online' | 'fixture',
     options?: { payload?: unknown; term?: { code: string; name: string } },
   ) => Promise<{ run?: SyncRun; runId?: string; imported?: number }>
+  patchSettings: (patch: Partial<Record<keyof Settings, string>>) => Promise<{ settings: Settings }>
+  postFocusSession: (session: NewFocusSession) => Promise<{ session: { id: string } }>
+  /**
+   * 把一张图的字节存进库目录，拿回它的绝对路径。
+   *
+   * 只有粘贴的截图需要它——剪贴板里没有磁盘路径。拖进来的文件本来就在盘上，
+   * 直接把路径给 throwIn 即可。
+   */
+  uploadImage: (contentType: string, base64: string) => Promise<{ path: string }>
   serverUrl: string
 }
 
@@ -192,6 +227,11 @@ const realApi: Api = {
   runSync: (source = null, mode = 'online', options = {}) => call('/api/sync/run', {
     method: 'POST', body: JSON.stringify({ source, mode, ...options }),
   }),
+  patchSettings: (patch) => call('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+  postFocusSession: (session) =>
+    call('/api/focus-sessions', { method: 'POST', body: JSON.stringify(session) }),
+  uploadImage: (contentType, base64) =>
+    call('/api/blobs', { method: 'POST', body: JSON.stringify({ contentType, base64 }) }),
   serverUrl: BASE,
 }
 
@@ -209,4 +249,5 @@ export const queryKeys = {
   project: (id: string) => ['projects', id] as const,
   confirmations: ['confirmations'] as const,
   thoughts: ['thoughts'] as const,
+  settings: ['settings'] as const,
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const ExternalSource = z.enum(['ruc.portal', 'ruc.graduate'])
+export const ExternalSource = z.enum(['ruc.portal', 'ruc.graduate', 'local.ics'])
 export type ExternalSource = z.infer<typeof ExternalSource>
 
 export const ExternalKind = z.enum(['calendar', 'timetable', 'exam'])
