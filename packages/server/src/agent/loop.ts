@@ -67,7 +67,12 @@ export async function runAgentLoop(
   const droppedIds = new Set<string>()
 
   for (let step = 1; step <= MAX_STEPS; step += 1) {
-    const res = await callAgent(model, { messages, tools: toolSpecs() })
+    /*
+     * 这条路在改库，而且改错了要靠人回头去发现——合并到哪一条、算不算同一件事，
+     * 都是要想一下的判断。用户不在等这一步的结果（回执随后才出现），几秒钟换稳当
+     * 是划算的。
+     */
+    const res = await callAgent(model, { messages, tools: toolSpecs(), effort: 'low' })
     if (res.toolCalls.length === 0) {
       counts.updated = updatedIds.size
       counts.dropped = droppedIds.size

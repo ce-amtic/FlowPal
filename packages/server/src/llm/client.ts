@@ -1,5 +1,17 @@
 import OpenAI from 'openai'
-import type { ModelConfig } from '../config.ts'
+import type { Effort, ModelConfig } from '../config.ts'
+
+/**
+ * 这一次请求要带的供应商字段：恒定的那些，加上这一档要加的那些。
+ *
+ * 顺序是「恒定在前、档位在后」，所以某一档可以覆盖恒定项——比如平时关思考，
+ * 唯独改库那条把它打开。
+ *
+ * 配置里没写 effort 表就等于没有强度控制，这时三个档位一视同仁。
+ */
+function paramsFor(model: ModelConfig, effort: Effort): Record<string, unknown> {
+  return { ...model.params, ...(model.effort?.[effort] ?? {}) }
+}
 
 /**
  * 供应商是配置不是代码路径：换一家是改 config.local.json 里的三个字段，不是改代码。
@@ -20,6 +32,8 @@ export type JsonCall = {
   schemaName: string
   /** z.toJSONSchema 产物；给 null 表示这次调用不需要结构化输出。 */
   jsonSchema: unknown
+  /** 这一次要多少思考。由调用点决定：要快的给 none，要稳的给 low 或 high。 */
+  effort: Effort
 }
 
 export async function callJson(model: ModelConfig, call: JsonCall): Promise<unknown> {
@@ -95,13 +109,18 @@ export type AgentCallResult = {
  */
 export async function callAgent(
   model: ModelConfig,
-  call: { messages: OpenAI.Chat.ChatCompletionMessageParam[]; tools: AgentToolSpec[] },
+  call: {
+    messages: OpenAI.Chat.ChatCompletionMessageParam[]
+    tools: AgentToolSpec[]
+    /** 改库这条路要多想一会儿——错了不好收回，几秒钟换稳当是划算的 */
+    effort: Effort
+  },
 ): Promise<AgentCallResult> {
   const client = new OpenAI({ baseURL: model.baseUrl, apiKey: model.apiKey })
   const res = await client.chat.completions.create({
     model: model.model,
     // 供应商专属字段原样透传，见 ModelConfig.params
-    ...model.params,
+    ...paramsFor(model, call.effort),
     messages: call.messages,
     tools: call.tools.map((t) => ({
       type: 'function' as const,
@@ -143,7 +162,7 @@ async function attempt(
   const res = await client.chat.completions.create({
     model: model.model,
     // 供应商专属字段原样透传，见 ModelConfig.params
-    ...model.params,
+    ...paramsFor(model, call.effort),
     messages: [
       { role: 'system', content: system },
       { role: 'user', content },

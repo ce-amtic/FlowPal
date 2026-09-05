@@ -271,6 +271,8 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
         user: context.formatted,
         schemaName: 'now_output',
         jsonSchema: nowJsonSchema(),
+        // 这一页是首屏，人正等着它出来。而且这里量过：关掉思考，梯子反而更准。
+        effort: 'none',
       })
       /*
        * 逐项验，不整份验。

@@ -25,6 +25,8 @@ export async function extract(
       : undefined,
     schemaName: 'extract_output',
     jsonSchema: extractJsonSchema(),
+    // 抽取要读懂一段乱七八糟的原文，没人在等它的秒数——和改库那条同一档
+    effort: 'low',
   })
 
   const parsed = ExtractOutput.safeParse(fillAbsentNullableFields(raw))
