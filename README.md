@@ -49,11 +49,11 @@ pnpm demo:reset
 
 ```
 packages/
-  shared/    契约：ExtractOutput、MergePlan、Ctx、校历。三个包共用
-  server/    Hono + SQLite + 抽取管道 + 教务接入。不依赖 electron
+  shared/    契约：条目、项目、agent 工具 schema、NowOutput、Ctx、校历。三个包共用
+  server/    Hono + SQLite + agent 循环 + buildContext + 教务接入。不依赖 electron
   app/       React 界面。shell/ 是容器，views/collection/ 是采集视图
   desktop/   Electron 壳。全仓库唯一 import electron 的地方
-prompts/     抽取用的 prompt
+prompts/     agent.md / now.md / extract.md
 fixtures/    演示碎片与手写期望值
 data/        校历（进仓库）与 SQLite（不进）
 ```

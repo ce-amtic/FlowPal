@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { Citation, Ctx, ExtractedItem, Item, ItemStatus, MergePlan, PlannedItem } from '@flowpal/shared'
+import type { Citation, Ctx, ExtractedItem, Item, ItemStatus } from '@flowpal/shared'
 import { newId } from './db.ts'
 
 export type ItemWithSources = Item & {
@@ -17,50 +17,6 @@ export function listItems(db: DatabaseSync): ItemWithSources[] {
 export function getItem(db: DatabaseSync, id: string): ItemWithSources | null {
   const row = db.prepare(`SELECT * FROM items WHERE id = ?`).get(id) as Record<string, any> | undefined
   return row ? hydrate(db, rowToItem(row)) : null
-}
-
-/**
- * 落合并计划。语义层只算出计划，写 item_sources / item_history 的是这里。
- *
- * 返回受影响的条目 id，顺序与传入的 planned 一一对应。
- */
-export function applyPlans(
-  db: DatabaseSync, ctx: Ctx, fragmentId: string, planned: PlannedItem[],
-): string[] {
-  const out: string[] = []
-  for (const { extracted, plan } of planned) {
-    out.push(applyOne(db, ctx, fragmentId, extracted, plan))
-  }
-  return out
-}
-
-function applyOne(
-  db: DatabaseSync, ctx: Ctx, fragmentId: string, extracted: ExtractedItem, plan: MergePlan,
-): string {
-  switch (plan.action) {
-    case 'new': {
-      const id = insertItem(db, ctx, extracted)
-      addSource(db, ctx, id, fragmentId)
-      addItemCitations(db, id, fragmentId, extracted)
-      return id
-    }
-    case 'merge_into': {
-      // 已有条目再多一个来源。items 一个字段都不用动。
-      addSource(db, ctx, plan.itemId, fragmentId)
-      addItemCitations(db, plan.itemId, fragmentId, extracted)
-      return plan.itemId
-    }
-    case 'reschedule': {
-      // 改期：既是合并也是一次带来源的字段变更。历史里那一行是画像的「日期推移」信号。
-      // 动哪一列由语义层在计划里指定，这里不猜。
-      db.prepare(`UPDATE items SET ${plan.field} = ?, updated_at = ? WHERE id = ?`)
-        .run(plan.to, ctx.now, plan.itemId)
-      recordItemHistory(db, ctx, plan.itemId, plan.field, plan.from, plan.to, 'llm', fragmentId)
-      addSource(db, ctx, plan.itemId, fragmentId)
-      addItemCitations(db, plan.itemId, fragmentId, extracted)
-      return plan.itemId
-    }
-  }
 }
 
 export type InsertItemOptions = {
@@ -179,6 +135,64 @@ export function updateItemFields(
     db.prepare(`UPDATE items SET ${field} = ?, updated_at = ? WHERE id = ?`).run(value, ctx.now, id)
     recordItemHistory(db, ctx, id, field, before[field], value, 'user', null)
   }
+}
+
+/** agent 循环里的 updateItem。actor 是 llm，fragment_id 指回引发改动的碎片。 */
+export function updateItemForAgent(
+  db: DatabaseSync, ctx: Ctx, id: string, patch: Record<string, string | null>,
+  fragmentId: string, projectId?: string | null,
+): void {
+  const before = db.prepare(`SELECT * FROM items WHERE id = ?`).get(id) as Record<string, any> | undefined
+  if (!before) throw new Error(`条目不存在：${id}`)
+  for (const [field, value] of Object.entries(patch)) {
+    if (field === 'project') continue
+    if (!ALLOWED_PATCH_FIELDS.has(field)) throw new Error(`不可改的字段：${field}`)
+    if (before[field] === value) continue
+    db.prepare(`UPDATE items SET ${field} = ?, updated_at = ? WHERE id = ?`).run(value, ctx.now, id)
+    recordItemHistory(db, ctx, id, field, before[field], value as string | null, 'llm', fragmentId)
+  }
+  if (projectId !== undefined && before.project_id !== projectId) {
+    db.prepare(`UPDATE items SET project_id = ?, updated_at = ? WHERE id = ?`).run(projectId, ctx.now, id)
+    recordItemHistory(db, ctx, id, 'project_id', before.project_id, projectId, 'llm', fragmentId)
+  }
+}
+
+/** 标记丢弃。碎片永不删除，条目也只标不删。 */
+export function dropItem(
+  db: DatabaseSync, ctx: Ctx, id: string,
+  actor: 'user' | 'llm' = 'llm', fragmentId: string | null = null,
+): void {
+  const before = db.prepare(`SELECT * FROM items WHERE id = ?`).get(id) as Record<string, any> | undefined
+  if (!before) throw new Error(`条目不存在：${id}`)
+  if (before.status === 'dropped') return
+  db.prepare(`UPDATE items SET status = 'dropped', updated_at = ? WHERE id = ?`).run(ctx.now, id)
+  recordItemHistory(db, ctx, id, 'status', before.status, 'dropped', actor, fragmentId)
+}
+
+/**
+ * 工具兜底的条目检索。query 匹配 title / date_raw；from/to 给的是日期，只对有时间字段
+ * 的条目做范围过滤。这里不做相关性预筛——那正是模型在循环里该做的事。
+ */
+export function searchItems(
+  db: DatabaseSync, query: string, from: string | null, to: string | null,
+): ItemWithSources[] {
+  const like = '%' + query + '%'
+  const rows = db.prepare(
+    `SELECT * FROM items WHERE status != 'dropped' AND (title LIKE ? OR date_raw LIKE ?)
+     ORDER BY created_at DESC`,
+  ).all(like, like) as Record<string, any>[]
+  let items = rows.map((row) => hydrate(db, rowToItem(row)))
+  if (from || to) {
+    items = items.filter((i) => {
+      const at = i.startsAt ?? i.dueAt
+      if (!at) return false
+      const day = at.slice(0, 10)
+      if (from && day < from) return false
+      if (to && day > to) return false
+      return true
+    })
+  }
+  return items
 }
 
 const ALLOWED_PATCH_FIELDS = new Set([

@@ -1,20 +1,17 @@
 {
-  "now": "2026-10-16T19:30:00+08:00",
+  "now": "2026-09-17T10:00:00+08:00",
   "fragment": {
     "source": "paste",
     "rawType": "text",
-    "rawText": "高数作业做到第三题，卡在积分不会做了。"
+    "rawText": "数据结构第三次作业发布了，PTA 平台上交。"
   },
   "expect": {
     "count": 1,
     "types": [
-      "progress"
+      "task"
     ],
     "statuses": [
       "active"
-    ],
-    "projects": [
-      "高等数学"
     ],
     "created": 1,
     "updated": 0,

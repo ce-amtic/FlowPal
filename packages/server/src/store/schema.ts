@@ -137,4 +137,31 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_fragment ON runs(fragment_id);
+
+-- agent 循环的工具调用痕迹。只存工具名与参数，不存工具结果（碎片原文不进渲染进程）。
+-- /api/runs/:id/events 先回放这张表，再流式推新增。
+CREATE TABLE IF NOT EXISTS run_events (
+  id     TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  seq    INTEGER NOT NULL,
+  at     TEXT NOT NULL,
+  tool   TEXT NOT NULL,
+  args   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_run_events_run ON run_events(run_id, seq);
+
+-- 首次启动问一次的个人化参数（chronotype 两问等）。B 的 /settings 写，A 的 buildContext 读。
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- 「此刻」结果的落库缓存。只缓存一行；失效规则在 routes 里判断，不在这里猜。
+CREATE TABLE IF NOT EXISTS now_cache (
+  id         TEXT PRIMARY KEY CHECK (id = 'singleton'),
+  payload    TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 `

@@ -11,9 +11,8 @@
       "thought",
       "thought"
     ],
-    "plans": [
-      "new",
-      "new"
-    ]
+    "created": 2,
+    "updated": 0,
+    "needsConfirm": 0
   }
 }
