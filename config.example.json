@@ -7,12 +7,14 @@
     "text": {
       "baseUrl": "https://api.example.com/v1",
       "apiKey": "",
-      "model": ""
+      "model": "",
+      "params": {}
     },
     "vision": {
       "baseUrl": "https://api.example.com/v1",
       "apiKey": "",
-      "model": ""
+      "model": "",
+      "params": {}
     }
   },
 

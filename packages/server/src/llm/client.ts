@@ -43,6 +43,26 @@ export async function callJson(model: ModelConfig, call: JsonCall): Promise<unkn
   }
 }
 
+/**
+ * 每次调用打一行用量，重点是前缀缓存命中了多少。
+ *
+ * 不打就只能猜：上下文怎么排对缓存友不友好，是个可以量的问题，而在量到之前
+ * 所有关于它的说法都是编的。DeepSeek 在 usage 里给 prompt_cache_hit_tokens /
+ * prompt_cache_miss_tokens；别的供应商没有这两个字段时只打总数。
+ */
+function logUsage(label: string, usage: OpenAI.CompletionUsage | undefined): void {
+  if (!usage) return
+  const u = usage as OpenAI.CompletionUsage & {
+    prompt_cache_hit_tokens?: number
+    prompt_cache_miss_tokens?: number
+  }
+  const hit = u.prompt_cache_hit_tokens
+  const cache = hit === undefined
+    ? ''
+    : ` 缓存命中 ${hit}/${usage.prompt_tokens}（${Math.round(hit / Math.max(usage.prompt_tokens, 1) * 100)}%）`
+  console.log(`[llm ${label}] 入 ${usage.prompt_tokens} 出 ${usage.completion_tokens}${cache}`)
+}
+
 function isResponseFormatUnavailable(e: unknown): boolean {
   return e instanceof OpenAI.BadRequestError &&
     String((e as { message?: string }).message).includes('response_format')
@@ -80,6 +100,8 @@ export async function callAgent(
   const client = new OpenAI({ baseURL: model.baseUrl, apiKey: model.apiKey })
   const res = await client.chat.completions.create({
     model: model.model,
+    // 供应商专属字段原样透传，见 ModelConfig.params
+    ...model.params,
     messages: call.messages,
     tools: call.tools.map((t) => ({
       type: 'function' as const,
@@ -92,6 +114,8 @@ export async function callAgent(
     })),
     tool_choice: 'auto',
   })
+
+  logUsage('agent', res.usage)
 
   const msg = res.choices[0]?.message
   const toolCalls: AgentToolCall[] = []
@@ -118,12 +142,16 @@ async function attempt(
 
   const res = await client.chat.completions.create({
     model: model.model,
+    // 供应商专属字段原样透传，见 ModelConfig.params
+    ...model.params,
     messages: [
       { role: 'system', content: system },
       { role: 'user', content },
     ],
     response_format: responseFormat,
   })
+
+  logUsage(call.schemaName, res.usage)
 
   const text = res.choices[0]?.message?.content
   if (!text) throw new Error(`模型没有返回内容：${JSON.stringify(res.choices[0])}`)
