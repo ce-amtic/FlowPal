@@ -82,15 +82,17 @@
 
 ```json
 {
-  "primary": { "itemId": "itm_...", "title": "...", "why": "...", "step": "..." },
+  "primary": { "itemId": "itm_...", "title": "...", "reason": "...", "steps": ["...", "..."] },
   "alternates": [ ... ],
   "energy": "...",
-  "basis": [ { "itemId": "itm_...", "quote": "...", "field": "..." } ]
+  "basis": ["itm_... 或逐字事实"]
 }
 ```
 
 空库时 `primary:null, alternates:[], energy:null, basis:[]`。缓存失效三选一：跨半小时、库有写入、
 `POST /api/now/refresh`。
+
+`reason` 与 `steps` 对齐 `packages/app/src/api.ts` 的 `NowPick`；`steps` 至少两级，是「更小的一步」的本地切口数组。
 
 ## 6. 怎么跑
 
