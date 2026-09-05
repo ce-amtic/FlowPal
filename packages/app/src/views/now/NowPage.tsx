@@ -32,8 +32,11 @@ export function NowPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  // 标题栏那个加号把焦点一起带过来，省掉一次点击
-  const focusComposer = useLocation().state?.focusComposer === true
+  // 标题栏那个加号、以及全局快捷键，把焦点一起带过来，省掉一次点击
+  const navState = useLocation().state
+  const focusComposer = navState?.focusComposer === true
+  // 拖进窗口的图片。壳把路径带到这里，由记录框提交并显示回执
+  const droppedPaths = navState?.droppedPaths as string[] | undefined
 
   // 记录框钉在底部时脱离布局，正文末尾要留出它那么高的空，否则最后一行被压住
   const [composerHeight, setComposerHeight] = useState(0)
@@ -154,6 +157,7 @@ export function NowPage() {
         autoFocus={focusComposer}
         floating={isLoading || candidate !== undefined}
         onHeight={setComposerHeight}
+        droppedPaths={droppedPaths}
       />
 
       <Upcoming />

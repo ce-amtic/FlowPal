@@ -150,6 +150,13 @@ export type Api = {
   getSettings: () => Promise<{ settings: Settings }>
   patchSettings: (patch: Partial<Record<keyof Settings, string>>) => Promise<{ settings: Settings }>
   postFocusSession: (session: NewFocusSession) => Promise<{ session: { id: string } }>
+  /**
+   * 把一张图的字节存进库目录，拿回它的绝对路径。
+   *
+   * 只有粘贴的截图需要它——剪贴板里没有磁盘路径。拖进来的文件本来就在盘上，
+   * 直接把路径给 throwIn 即可。
+   */
+  uploadImage: (contentType: string, base64: string) => Promise<{ path: string }>
   serverUrl: string
 }
 
@@ -182,6 +189,8 @@ const realApi: Api = {
   patchSettings: (patch) => call('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
   postFocusSession: (session) =>
     call('/api/focus-sessions', { method: 'POST', body: JSON.stringify(session) }),
+  uploadImage: (contentType, base64) =>
+    call('/api/blobs', { method: 'POST', body: JSON.stringify({ contentType, base64 }) }),
   serverUrl: BASE,
 }
 

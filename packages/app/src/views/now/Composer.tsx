@@ -5,7 +5,7 @@ import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/r
 import { api } from '../../api.ts'
 import { transition } from '../../tokens/motion.ts'
 
-type RecordMutation = UseMutationResult<Awaited<ReturnType<typeof api.throwIn>>, Error, string>
+type RecordMutation = UseMutationResult<Awaited<ReturnType<typeof api.throwIn>>, Error, Recording>
 
 /**
  * 主窗口里的记录口。四个采集入口里归主窗口的那一个，另外三个（全局快捷键、
@@ -19,11 +19,19 @@ type RecordMutation = UseMutationResult<Awaited<ReturnType<typeof api.throwIn>>,
  * 库里没有可推的东西时它留在流里，跟在问候语下面——底下挂个框、上面一片空，
  * 看起来像坏了。
  */
+/** 这个框接得住的三样东西。文字与图片走的是同一条管道，只是原文的形态不同 */
+type Recording =
+  | { kind: 'text'; text: string }
+  | { kind: 'pastedImage'; file: File }
+  | { kind: 'droppedImage'; path: string }
+
 export function Composer({
-  autoFocus, floating, onHeight, placeholder = '输入或粘贴', linkItems = true,
+  autoFocus, floating, onHeight, placeholder = '输入或粘贴', linkItems = true, droppedPaths,
 }: {
   autoFocus?: boolean
   floating: boolean
+  /** 拖进窗口的图片路径。只有 Electron 里有——浏览器给不出磁盘路径 */
+  droppedPaths?: string[]
   /** 钉住时它脱离布局，正文末尾要留出等高的空。高度量出来往上报，不写死 */
   onHeight: (px: number) => void
   /** 专注中这个框是用来接住杂念的，说法跟着变——同一个东西，两种在场理由 */
@@ -39,13 +47,38 @@ export function Composer({
   useEffect(() => { if (autoFocus) box.current?.focus() }, [autoFocus])
 
   const record = useMutation({
-    mutationFn: (rawText: string) =>
-      api.throwIn({ source: 'paste', rawType: 'text', rawText }),
+    mutationFn: async (input: Recording) => {
+      if (input.kind === 'text') {
+        return api.throwIn({ source: 'paste', rawType: 'text', rawText: input.text })
+      }
+      // 拖进来的文件本来就在盘上，把路径给出去就行，不必再搬一份
+      if (input.kind === 'droppedImage') {
+        return api.throwIn({ source: 'drop', rawType: 'image', rawBlobPath: input.path })
+      }
+      // 粘贴的截图只有字节没有路径，先让它落盘
+      const { path } = await api.uploadImage(input.file.type, await toBase64(input.file))
+      return api.throwIn({ source: 'paste', rawType: 'image', rawBlobPath: path })
+    },
     onSuccess: () => {
       setText('')
       queryClient.invalidateQueries()
     },
   })
+
+  /*
+   * 从「此刻」拖进来的文件。判重靠路径：这个 prop 每次渲染都是同一个数组引用，
+   * 但换一页再回来会重新触发，不记下来就会把同一张图记两遍。
+   */
+  const dropped = useRef(new Set<string>())
+  useEffect(() => {
+    for (const path of droppedPaths ?? []) {
+      if (dropped.current.has(path)) continue
+      dropped.current.add(path)
+      record.mutate({ kind: 'droppedImage', path })
+    }
+    // record 每次渲染都是新对象，放进依赖会把这个 effect 变成每帧都跑
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [droppedPaths])
 
   useEffect(() => {
     const el = form.current
@@ -58,7 +91,21 @@ export function Composer({
 
   const submit = () => {
     const trimmed = text.trim()
-    if (trimmed.length > 0 && !record.isPending) record.mutate(trimmed)
+    if (trimmed.length > 0 && !record.isPending) record.mutate({ kind: 'text', text: trimmed })
+  }
+
+  /*
+   * 粘贴一张截图。这是这条产品线上最短的一个动作：截完图直接 Cmd+V，
+   * 不用先存成文件再拖进来。
+   *
+   * 剪贴板里同时有图和文字时（很多截图工具会附带一段说明）以图为准——
+   * 那段文字通常是文件名之类的噪音。
+   */
+  const paste = (e: React.ClipboardEvent) => {
+    const image = Array.from(e.clipboardData.files).find((f) => f.type.startsWith('image/'))
+    if (!image || record.isPending) return
+    e.preventDefault()
+    record.mutate({ kind: 'pastedImage', file: image })
   }
 
   return (
@@ -87,6 +134,7 @@ export function Composer({
         rows={1}
         value={text}
         placeholder={placeholder}
+        onPaste={paste}
         onChange={(e) => {
           setText(e.target.value)
           // 开始写下一条，上一条的回执就该让位。它不堆积，屏幕上永远只有最新那一条
@@ -153,6 +201,20 @@ function Receipt({ record, linkItems }: { record: RecordMutation; linkItems: boo
       )}
     </>
   )
+}
+
+/**
+ * 图片字节转 base64。分段拼而不是一次 apply：一张截图有几百万字节，
+ * 整个铺开当参数传会把调用栈撑爆。
+ */
+async function toBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const CHUNK = 0x8000
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(binary)
 }
 
 /** 三个点。等待要几秒，一行不动的字看起来像卡住了 */

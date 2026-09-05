@@ -68,6 +68,15 @@ app.whenReady().then(() => {
   // 等首帧再显示，避免开窗时闪一下白。
   win.once('ready-to-show', () => win?.show())
 
+  /*
+   * 界面加载不上时，上面那一行就永远不会触发，于是应用在跑、server 在跑、窗口
+   * 却根本不出现，终端里一个字都没有。开发时最常见的原因是界面那条 dev server
+   * 没起来。这里必须喊出来，不能让它静悄悄地什么都不发生。
+   */
+  win.webContents.on('did-fail-load', (_e, code, description, url) => {
+    console.error(`界面加载失败：${url} → ${description}（${code}）`)
+  })
+
   // 系统在运行中切深浅时，这两层不会自己跟着变。macOS 的毛玻璃会，所以不用管。
   if (!isMac) {
     nativeTheme.on('updated', () => {

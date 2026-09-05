@@ -2,12 +2,13 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { Calendar, Run } from '@flowpal/shared'
 import { createCtx, nowInShanghai, FragmentSource, RawType, NowChoice, NowOutput, nowJsonSchema } from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
+import { newId } from '../store/db.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
 import {
   addItemCitations, addItemSource, getItem, insertItem, itemHistory, listItems, updateItemFields,
@@ -405,6 +406,30 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
   app.get('/api/confirmations', (c) => {
     const items = listItems(db).filter((i) => i.status === 'needs_confirm')
     return c.json({ items, count: items.length })
+  })
+
+  // ── 图片落盘 ────────────────────────────────────────────────────────
+  /**
+   * 粘贴进来的截图只有字节，没有磁盘路径，而碎片存的是路径。先落到库目录里，
+   * 把绝对路径回给调用方，它再拿去发 POST /api/fragments。
+   *
+   * 拖进来的文件不走这里：它本来就在磁盘上，直接给路径即可，不必再搬一份。
+   */
+  const BlobBody = z.object({
+    contentType: z.string().regex(/^image\/(png|jpeg|webp|gif)$/),
+    base64: z.string().min(1),
+  })
+
+  app.post('/api/blobs', async (c) => {
+    const parsed = BlobBody.safeParse(await c.req.json())
+    if (!parsed.success) {
+      return c.json({ error: '图片参数不对', issues: parsed.error.issues }, 400)
+    }
+    const dir = join(config.dataDir, 'blobs')
+    mkdirSync(dir, { recursive: true })
+    const path = join(dir, `${newId('blob')}.${parsed.data.contentType.slice('image/'.length)}`)
+    writeFileSync(path, Buffer.from(parsed.data.base64, 'base64'))
+    return c.json({ path }, 201)
   })
 
   // ── 专注时段（B 的 /focus 写这里） ───────────────────────────────────

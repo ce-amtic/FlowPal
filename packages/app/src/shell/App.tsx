@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import { api, queryKeys } from '../api.ts'
-import { inElectron, onMac } from '../bridge.ts'
+import { bridge, inElectron, onMac } from '../bridge.ts'
 import { transition } from '../tokens/motion.ts'
 import { TitleBar } from './TitleBar.tsx'
 import { PendingOverlay } from './PendingOverlay.tsx'
@@ -29,6 +29,7 @@ import './shell.css'
  */
 export function App() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [pendingOpen, setPendingOpen] = useState(false)
 
   useServerEvents()
@@ -41,6 +42,21 @@ export function App() {
     document.body.classList.toggle('in-electron', inElectron)
     document.body.classList.toggle('on-mac', inElectron && onMac)
   }, [])
+
+  /*
+   * 桌面侧的两个采集入口都通向同一个地方：「此刻」上那个记录框。
+   *
+   * 全局快捷键把人和光标一起带过去；拖进窗口的图片把路径一起带过去，由那个框
+   * 提交并显示回执——一次投放需要一个看得见的落点，而落点只有一处。
+   */
+  useEffect(() => {
+    bridge.onHotkeyOpen(() => navigate('/now', { state: { focusComposer: true } }))
+    bridge.onFilesDropped((paths) => {
+      // 只收图片。别的类型只有路径没有内容，交给模型等于给它一个空信封
+      const images = paths.filter((p) => /\.(png|jpe?g|webp|gif)$/i.test(p))
+      if (images.length > 0) navigate('/now', { state: { droppedPaths: images } })
+    })
+  }, [navigate])
 
   /*
    * 设置还没取到时先什么都不画。
