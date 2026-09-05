@@ -19,11 +19,17 @@ type RecordMutation = UseMutationResult<Awaited<ReturnType<typeof api.throwIn>>,
  * 库里没有可推的东西时它留在流里，跟在问候语下面——底下挂个框、上面一片空，
  * 看起来像坏了。
  */
-export function Composer({ autoFocus, floating, onHeight }: {
+export function Composer({
+  autoFocus, floating, onHeight, placeholder = '输入或粘贴', linkItems = true,
+}: {
   autoFocus?: boolean
   floating: boolean
   /** 钉住时它脱离布局，正文末尾要留出等高的空。高度量出来往上报，不写死 */
   onHeight: (px: number) => void
+  /** 专注中这个框是用来接住杂念的，说法跟着变——同一个东西，两种在场理由 */
+  placeholder?: string
+  /** 专注中关掉：点进去就离开了这一段，而这一段还没记上。这正是这个模式要挡的事 */
+  linkItems?: boolean
 }) {
   const [text, setText] = useState('')
   const queryClient = useQueryClient()
@@ -70,7 +76,7 @@ export function Composer({ autoFocus, floating, onHeight }: {
             exit={{ opacity: 0, height: 0 }}
             transition={transition.base}
           >
-            <Receipt record={record} />
+            <Receipt record={record} linkItems={linkItems} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -80,7 +86,7 @@ export function Composer({ autoFocus, floating, onHeight }: {
         className="composer-box"
         rows={1}
         value={text}
-        placeholder="输入或粘贴"
+        placeholder={placeholder}
         onChange={(e) => {
           setText(e.target.value)
           // 开始写下一条，上一条的回执就该让位。它不堆积，屏幕上永远只有最新那一条
@@ -111,7 +117,7 @@ export function Composer({ autoFocus, floating, onHeight }: {
  * 所以这里播的是「变成了什么」：那句回执，加上抽出的条目本身，点得开。
  * 它只显示最近一次，写下一条时让位，所以这里不会长成一条对话流。
  */
-function Receipt({ record }: { record: RecordMutation }) {
+function Receipt({ record, linkItems }: { record: RecordMutation; linkItems: boolean }) {
   if (record.isPending) {
     return (
       <p className="receipt-line receipt-working">
@@ -139,7 +145,7 @@ function Receipt({ record }: { record: RecordMutation }) {
         <ul className="receipt-items">
           {items.map((item) => (
             <li key={item.id}>
-              <Link to={`/items/${item.id}`}>{item.title}</Link>
+              {linkItems ? <Link to={`/items/${item.id}`}>{item.title}</Link> : item.title}
               {item.status === 'needs_confirm' && <span className="receipt-tag">待确认</span>}
             </li>
           ))}

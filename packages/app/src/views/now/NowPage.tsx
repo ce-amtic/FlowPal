@@ -120,7 +120,18 @@ export function NowPage() {
           <motion.p layout="position" className="now-reason">{candidate.reason}</motion.p>
 
           <motion.div layout="position" className="now-actions">
-            <button className="primary" onClick={() => navigate('/focus')}>开始</button>
+            {/*
+              带过去的是屏幕上此刻这一步，不是第一步——按过「更小的一步」之后，
+              专注屏上还写着原来那句就等于那几下白按了。
+            */}
+            <button
+              className="primary"
+              onClick={() => navigate('/focus', {
+                state: { focus: { itemId: candidate.itemId, title: candidate.title, step } },
+              })}
+            >
+              开始
+            </button>
             {hasSmaller && (
               <button className="quiet" onClick={() => setStepIndex((i) => i + 1)}>
                 更小的一步

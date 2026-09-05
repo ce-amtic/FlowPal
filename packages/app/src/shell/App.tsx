@@ -50,6 +50,15 @@ export function App() {
   // 取失败不等于没走过向导。连不上 server 时进壳，让每一页自己把错误说出来
   if (settings.data && !settings.data.settings.onboarded_at) return <WelcomePage />
 
+  /*
+   * 专注在壳外面。它是模式不是页：整窗换一副样子，导航条不在，时段里到达的东西
+   * 也就不会从待确认角标上冒出来打断人。
+   *
+   * 手上没有目标就不成其为模式——直接开这条路由时它照常留在壳里，那一页会说
+   * 该去哪儿选一件。
+   */
+  if (location.pathname === '/focus' && location.state?.focus) return <FocusPage />
+
   return (
     <div className="shell">
       <TitleBar onOpenPending={() => setPendingOpen(true)} />

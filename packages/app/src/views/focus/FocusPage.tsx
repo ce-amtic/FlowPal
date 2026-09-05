@@ -1,16 +1,240 @@
-import { Empty } from '../../shell/State.tsx'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { nowInShanghai } from '@flowpal/shared'
+import { api, queryKeys } from '../../api.ts'
+import { transition } from '../../tokens/motion.ts'
+import { Pebble } from '../../pebble/Pebble.tsx'
+import { ErrorState } from '../../shell/State.tsx'
+import { Composer } from '../now/Composer.tsx'
+import './focus.css'
 
 /**
- * 专注是模式不是页面：进来之后整个窗口换一副样子，出去回到原处。
+ * 专注是模式不是页：进来之后整个窗口换一副样子，出去回到原处。所以这一屏没有
+ * 导航条——顺带，时段里到达的东西也就不会从角标上冒出来打断人。
  *
- * 这条路由归桌面侧那条线：计时、形象在场、结束时两个按钮、结束简报。
- * 这里只占住位置，让「此刻」上的开始按钮有地方可去。
+ * 三段：定时长、走计时、结束。结束只有两个按钮、零打字：已完成的意思是那件事
+ * 做完了；下次继续把它留着，并且直接改变下一次「此刻」——那条记录带着事情的
+ * 名字进处境，模型接得上。
+ *
+ * 时长与目标只活在内存里，时段结束才写库。中途刷新页面会丢掉这一段。
  */
+const DURATIONS = [15, 25, 45]
+const DEFAULT_MINUTES = 25
+
+/** 从「此刻」带过来的目标。带的是当时屏幕上那一步，不是第一步——按过「更小的一步」就该算数 */
+type Target = { itemId: string; title: string; step: string }
+
+type Phase =
+  | { name: 'ready' }
+  | { name: 'running'; startedAt: string; startedMs: number }
+  | { name: 'ending'; startedAt: string; startedMs: number; endedMs: number }
+
 export function FocusPage() {
+  const target = useLocation().state?.focus as Target | undefined
+  const [minutes, setMinutes] = useState(DEFAULT_MINUTES)
+  const [phase, setPhase] = useState<Phase>({ name: 'ready' })
+
+  if (!target) return <Blank />
+
+  return (
+    <div className="focus">
+      <Pebble size={112} mood={phase.name === 'running' ? 'focus' : 'calm'} />
+
+      <p className="focus-title">{target.title}</p>
+      {phase.name !== 'ending' && <p className="focus-step">{target.step}</p>}
+
+      <AnimatePresence mode="wait" initial={false}>
+        {phase.name === 'ready' && (
+          <Panel key="ready">
+            <p className="focus-label">打算做多久</p>
+            <div className="focus-choices">
+              {DURATIONS.map((m) => (
+                <button
+                  key={m}
+                  className={m === minutes ? 'focus-choice picked' : 'focus-choice'}
+                  onClick={() => setMinutes(m)}
+                >
+                  {m} 分钟
+                </button>
+              ))}
+            </div>
+            <button
+              className="primary focus-go"
+              onClick={() => setPhase({
+                // 库里其余时刻都是 +08:00 的写法，这里跟着来：发 UTC 的话，
+                // 凌晨那几个小时的时段会被算进前一天。
+                name: 'running', startedAt: nowInShanghai(), startedMs: Date.now(),
+              })}
+            >
+              开始
+            </button>
+          </Panel>
+        )}
+
+        {phase.name === 'running' && (
+          <Panel key="running">
+            <Countdown
+              endsAtMs={phase.startedMs + minutes * 60_000}
+              onDone={() => setPhase({ ...phase, name: 'ending', endedMs: Date.now() })}
+            />
+            <button
+              className="quiet focus-stop"
+              onClick={() => setPhase({ ...phase, name: 'ending', endedMs: Date.now() })}
+            >
+              结束
+            </button>
+          </Panel>
+        )}
+
+        {phase.name === 'ending' && (
+          <Panel key="ending">
+            <Ending
+              target={target}
+              startedAt={phase.startedAt}
+              plannedMinutes={minutes}
+              actualMinutes={Math.max(1, Math.round((phase.endedMs - phase.startedMs) / 60_000))}
+            />
+          </Panel>
+        )}
+      </AnimatePresence>
+
+      {/*
+        专注中冒出的杂念要有地方放，否则它要么占着脑子，要么把人拽出这一段。
+        记下的东西在结束那一屏原样列出来——记了就看得见，这是这个框存在的理由。
+      */}
+      {phase.name === 'running' && (
+        <div className="focus-composer">
+          <Composer
+            floating={false}
+            onHeight={() => {}}
+            placeholder="想到别的，先记在这里"
+            linkItems={false}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 直接开 /focus 而不是从「此刻」进来。这时它不是一个模式，只是一条走空了的路 */
+function Blank() {
   return (
     <>
       <h1 className="page-title">专注</h1>
-      <Empty>先在「此刻」选一件事。</Empty>
+      <p className="state state-empty">
+        <Link to="/now">先在「此刻」选一件事。</Link>
+      </p>
     </>
+  )
+}
+
+/**
+ * 倒计时。每一秒从时刻差重算，不累加计数器——后者在标签页被挂起后会走慢。
+ */
+function Countdown({ endsAtMs, onDone }: { endsAtMs: number; onDone: () => void }) {
+  const [left, setLeft] = useState(() => endsAtMs - Date.now())
+
+  useEffect(() => {
+    const id = setInterval(() => setLeft(endsAtMs - Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [endsAtMs])
+
+  // 归零就是这一段走完了，落到结束那一屏上问同样的两个问题。不响铃：
+  // 一段安静的时间不该以一声惊动收尾。
+  useEffect(() => { if (left <= 0) onDone() }, [left, onDone])
+
+  const total = Math.max(0, Math.ceil(left / 1000))
+  const mm = String(Math.floor(total / 60)).padStart(2, '0')
+  const ss = String(total % 60).padStart(2, '0')
+  return <p className="focus-clock">{mm}:{ss}</p>
+}
+
+/**
+ * 结束。两个按钮，零打字：已完成 ｜ 下次继续。
+ *
+ * 「已完成」把那件事记成完成，「此刻」从此不再推它；「下次继续」把它留着，
+ * 并且让下一次「此刻」重新判断——那件没做完的事带着名字进处境。
+ */
+function Ending({ target, startedAt, plannedMinutes, actualMinutes }: {
+  target: Target
+  startedAt: string
+  plannedMinutes: number
+  actualMinutes: number
+}) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const finish = useMutation({
+    mutationFn: async (done: boolean) => {
+      await api.postFocusSession({
+        startedAt, plannedMinutes, actualMinutes, endedEarly: !done, itemId: target.itemId,
+      })
+      if (!done) return
+      /*
+       * 只有事务才有「做完」这回事。事件是外部的时间点——为一场考试专注过一段，
+       * 不等于那场考试结束了，记成完成会让它从日程上消失。
+       */
+      const { item } = await api.getItem(target.itemId)
+      if (item.type === 'task') await api.patchItem(target.itemId, { status: 'done' })
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries()
+      // 这一页现在没挂着，失效不会触发重取。不把它扔掉的话，回到「此刻」会先看见
+      // 刚做完的那件事停在那儿几秒，等新判断算出来才换掉。
+      queryClient.removeQueries({ queryKey: queryKeys.now })
+      navigate('/now')
+    },
+  })
+
+  return (
+    <>
+      <div className="focus-end-actions">
+        <button className="primary" disabled={finish.isPending} onClick={() => finish.mutate(true)}>
+          已完成
+        </button>
+        <button className="quiet" disabled={finish.isPending} onClick={() => finish.mutate(false)}>
+          下次继续
+        </button>
+      </div>
+      {finish.error && <ErrorState error={finish.error} />}
+      <Jotted since={startedAt} />
+    </>
+  )
+}
+
+/**
+ * 这段时间记下的想法。一条没有就整块不出现——「你记下了 0 条」形式上是事实，
+ * 读起来是指责。
+ */
+function Jotted({ since }: { since: string }) {
+  const { data } = useQuery({ queryKey: queryKeys.thoughts, queryFn: api.listThoughts })
+  // 两边都是同一种带 +08:00 的写法，按字符串比就是按时间比
+  const jotted = (data?.thoughts ?? []).filter((t) => t.createdAt >= since)
+  if (jotted.length === 0) return null
+
+  // 不做成链接：这一屏的出口只有那两个按钮，点走了这一段就没记上
+  return (
+    <section className="focus-jotted">
+      <h2 className="group-label">这段时间你记下了</h2>
+      <ul className="focus-jotted-list">
+        {jotted.map((t) => <li key={t.id}>{t.title}</li>)}
+      </ul>
+    </section>
+  )
+}
+
+function Panel({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.div
+      className="focus-panel"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={transition.base}
+    >
+      {children}
+    </motion.div>
   )
 }

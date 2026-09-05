@@ -98,8 +98,13 @@ function observedSection(db: DatabaseSync, ctx: Ctx): ContextSection {
   const today = ctx.now.slice(0, 10)
   const todaySessions = sessions.filter((s) => s.startedAt.slice(0, 10) === today)
   facts.push(`今天已完成 ${todaySessions.length} 次专注`)
+  // 时段要带上做的是哪一件。「下次继续」之所以能改变下一次「此刻」，靠的就是这个
+  // 名字——模型接不上一件它叫不出名字的事。
+  const titleOf = new Map(listItems(db).map((i) => [i.id, i.title]))
   for (const s of todaySessions) {
-    facts.push(`今天 ${s.startedAt.slice(11, 16)} 开始，计划 ${s.plannedMinutes} 分钟，实际 ${s.actualMinutes ?? '未填'} 分钟${s.endedEarly ? '，提前结束' : '，完成'}`)
+    const on = s.itemId ? `做「${titleOf.get(s.itemId) ?? s.itemId}」` : ''
+    const ending = s.endedEarly ? '，没做完，用户选了下次继续' : '，做完了'
+    facts.push(`今天 ${s.startedAt.slice(11, 16)} 开始${on}，计划 ${s.plannedMinutes} 分钟，实际 ${s.actualMinutes ?? '未填'} 分钟${ending}`)
   }
   if (sessions.length > 0 && sessions.length < 5) {
     facts.push(`专注记录共 ${sessions.length} 次，不足以看出规律`)

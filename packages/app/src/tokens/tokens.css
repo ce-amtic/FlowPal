@@ -66,6 +66,7 @@
   --text-lead: 16px;
   --text-title: 20px;
   --text-display: 24px;
+  --text-clock: 40px;           /* 专注的倒计时。全 App 唯一要在几米外扫一眼的数字 */
   --leading: 1.6;
   --leading-tight: 1.35;        /* 标题与单行 */
 

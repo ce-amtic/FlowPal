@@ -1,0 +1,124 @@
+/*
+ * 专注是模式不是页：整窗换一副样子，没有导航条，一屏只有一件事。
+ *
+ * 竖向居中，和首次启动那一屏同一套：这时候屏幕上没有第二件可做的事，
+ * 贴顶反而像一份还没填完的表。
+ */
+.focus {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-10) var(--space-8);
+  text-align: center;
+  -webkit-app-region: drag;
+}
+
+/* 拖动区里的可点元素必须显式退出，否则点不动 */
+.focus button, .focus a, .focus textarea { -webkit-app-region: no-drag; }
+
+/* 名字和这一步是同一句话的两行，所以贴着；和「此刻」卡片上是同一个关系 */
+.focus-title {
+  margin: var(--space-5) 0 var(--space-2);
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.focus-step {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: 500;
+  line-height: var(--leading-tight);
+}
+
+/* 下面这一块是另一回事——先定多久、再走计时、最后收尾，所以断开 */
+.focus-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: var(--space-10);
+}
+
+.focus-label {
+  margin: 0 0 var(--space-2);
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+.focus-choices {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.focus-choice {
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  background: var(--field);
+  color: var(--fg-dim);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.focus-choice:hover { color: var(--fg); }
+.focus-choice.picked { background: var(--accent-soft); color: var(--accent); }
+
+.focus-go { margin-top: var(--space-5); }
+
+/*
+ * 时钟。等宽数字，否则每一秒整行都在轻微地左右挪，那正是这一屏最不该有的动静。
+ */
+.focus-clock {
+  margin: 0;
+  font-size: var(--text-clock);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+}
+
+/* 结束是随时可做的事，不是这一屏在催的事，所以它是次要分量 */
+.focus-stop { margin-top: var(--space-5); }
+
+.focus-end-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+/* 简报。它是这一段的回执，不是一份清单，所以不长成别处那种可点的行 */
+.focus-jotted {
+  margin-top: var(--space-10);
+  width: min(var(--content-max), 100%);
+}
+
+.focus-jotted .group-label { margin-bottom: var(--space-2); }
+
+.focus-jotted-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--fg-dim);
+}
+
+.focus-jotted-list li + li { margin-top: var(--space-2); }
+
+/*
+ * 记录框钉在窗口底部，不进居中的那一列——它是随时能用的东西，不该把
+ * 正在做的那件事往上顶。
+ */
+.focus-composer {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-5);
+  transform: translateX(-50%);
+  width: min(var(--content-max), calc(100% - var(--space-12)));
+  -webkit-app-region: no-drag;
+}
+
+.focus-composer .composer {
+  margin: 0;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}

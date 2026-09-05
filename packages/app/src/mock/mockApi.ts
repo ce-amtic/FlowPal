@@ -73,6 +73,8 @@ export const mockApi: Api = {
 
   patchSettings: () => Promise.reject(new Error('样例模式下不写入数据。')),
 
+  postFocusSession: () => Promise.reject(new Error('样例模式下不写入数据。')),
+
   listThoughts: () => delay({
     thoughts: ITEMS.filter((i) => i.type === 'thought' && i.status === 'active'),
   }),

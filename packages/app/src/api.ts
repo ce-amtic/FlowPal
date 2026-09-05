@@ -112,6 +112,21 @@ export type Settings = {
   onboarded_at: string | null
 }
 
+/**
+ * 一次专注时段。四个数在时段结束时一次写入：开始时刻、计划时长、实际时长、
+ * 是否提前结束。「下次继续」就是 endedEarly。
+ *
+ * `startedAt` 用 `nowInShanghai()` 那种带 +08:00 的写法，和库里其余时刻同一套——
+ * 发 UTC 的话，凌晨那几个小时的时段会被算进前一天。
+ */
+export type NewFocusSession = {
+  startedAt: string
+  plannedMinutes: number
+  actualMinutes: number
+  endedEarly: boolean
+  itemId: string | null
+}
+
 export type Api = {
   listItems: () => Promise<{ items: ItemWithSources[] }>
   getItem: (id: string) => Promise<{ item: ItemWithSources; history: ItemHistoryRow[] }>
@@ -134,6 +149,7 @@ export type Api = {
   listThoughts: () => Promise<{ thoughts: ItemWithSources[] }>
   getSettings: () => Promise<{ settings: Settings }>
   patchSettings: (patch: Partial<Record<keyof Settings, string>>) => Promise<{ settings: Settings }>
+  postFocusSession: (session: NewFocusSession) => Promise<{ session: { id: string } }>
   serverUrl: string
 }
 
@@ -164,6 +180,8 @@ const realApi: Api = {
   listThoughts: () => call('/api/thoughts'),
   getSettings: () => call('/api/settings'),
   patchSettings: (patch) => call('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+  postFocusSession: (session) =>
+    call('/api/focus-sessions', { method: 'POST', body: JSON.stringify(session) }),
   serverUrl: BASE,
 }
 

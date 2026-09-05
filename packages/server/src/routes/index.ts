@@ -426,6 +426,9 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
       return c.json({ error: '专注参数不对', issues: parsed.error.issues }, 400)
     }
     const session = insertFocusSession(db, ctx, parsed.data)
+    // 一次专注是处境的一部分，尤其是「下次继续」。不清缓存的话下一次「此刻」
+    // 还是刚才那一份判断，那件没做完的事永远排不到前面。
+    clearNowCache(db)
     broadcastChanged(ctx.now)
     return c.json({ session }, 201)
   })
