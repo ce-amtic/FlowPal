@@ -1,0 +1,48 @@
+.drops {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+}
+
+.drop { padding: var(--space-4) 0; }
+
+.drop-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.drop-icon { flex: 0 0 auto; }
+
+.drop-raw {
+  color: var(--fg);
+  font-size: var(--text-body);
+}
+
+/* 产出用一条细线挂在投放下面，看得出从属关系而不需要边框 */
+.drop-out {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0 0 0 var(--space-4);
+  border-left: 1px solid var(--line);
+  margin-left: var(--space-5);
+}
+
+.drop-out li { padding: var(--space-1) 0; }
+
+.drop-out a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.drop-out a:hover { color: var(--accent); }
+
+.drop-note {
+  margin: var(--space-2) 0 0 calc(var(--space-5) + var(--space-4));
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.drop-note button { margin-left: var(--space-3); }

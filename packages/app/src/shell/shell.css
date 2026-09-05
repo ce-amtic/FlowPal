@@ -95,12 +95,25 @@ body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
 
 .badge:hover { background: var(--accent-soft); color: var(--accent); }
 
+.tag {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-aux);
+  line-height: var(--leading-tight);
+}
+
+/* 样例数据的标记拿不掉：最怕的失败是拿着它演了却不知道 */
+.tag.mock {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 /* ── 正文 ───────────────────────────────────────────────── */
 
 .page {
   flex: 1;
   overflow-y: auto;
-  padding: 0 var(--space-6) var(--space-12);
+  padding: var(--space-6) var(--space-6) var(--space-12);
 }
 
 .page-inner {
@@ -156,6 +169,7 @@ body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
 .stamp {
   display: inline-block;
   min-width: 48px;
+  padding-right: var(--space-2);
   color: var(--fg-dim);
   font-size: var(--text-aux);
 }

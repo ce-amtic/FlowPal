@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "VITE_MOCK=1 vite",
     "build": "vite build",
     "check:tokens": "tsx scripts/check-tokens.ts"
   },
@@ -12,6 +13,7 @@
     "@flowpal/shared": "workspace:*",
     "@tanstack/react-query": "^5.102.8",
     "framer-motion": "^13.2.0",
+    "lucide-react": "^1.41.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.18.3"

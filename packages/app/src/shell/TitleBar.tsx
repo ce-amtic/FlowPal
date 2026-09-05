@@ -1,6 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api, queryKeys } from '../api.ts'
+import { Settings } from 'lucide-react'
+import { api, queryKeys, usingMock } from '../api.ts'
+import { ICON } from '../tokens/icons.ts'
 
 /**
  * 标题栏同时是导航与拖动区。系统标题栏被隐藏了，所以这条不只是装饰——
@@ -19,13 +21,8 @@ const PAGES = [
 export function TitleBar({ onOpenPending }: { onOpenPending: () => void }) {
   const navigate = useNavigate()
 
-  // 待确认只在有内容时出现。数目前从条目列表里数；待确认队列的接口落地后
-  // 换成它，届时这一处跟着改，别处不动。
-  const { data } = useQuery({
-    queryKey: queryKeys.items,
-    queryFn: api.listItems,
-  })
-  const pending = data?.items.filter((i) => i.status === 'needs_confirm').length ?? 0
+  const { data } = useQuery({ queryKey: queryKeys.pending, queryFn: api.listPending })
+  const pending = data?.items.length ?? 0
 
   return (
     <header className="titlebar">
@@ -38,13 +35,17 @@ export function TitleBar({ onOpenPending }: { onOpenPending: () => void }) {
       </nav>
 
       <div className="right">
+        {/* 样例数据必须看得见。最怕的失败是拿着它演了却不知道 */}
+        {usingMock && <span className="tag mock">样例数据</span>}
+
         {pending > 0 && (
-          <button className="icon-button badge" onClick={onOpenPending} title="待确认">
-            {pending}
+          <button className="icon-button badge" onClick={onOpenPending}>
+            {pending} 条待确认
           </button>
         )}
-        <button className="icon-button" onClick={() => navigate('/settings')} title="设置">
-          设置
+
+        <button className="icon-button" onClick={() => navigate('/settings')} aria-label="设置">
+          <Settings size={ICON.size} strokeWidth={ICON.stroke} />
         </button>
       </div>
     </header>

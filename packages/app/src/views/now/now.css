@@ -1,0 +1,92 @@
+.now-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+/* 形象的位置。素材接进来之前先占住，避免版式后面整体挪一次 */
+.avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+}
+
+.greeting {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+/* 卡片只用于可以整体操作的对象。「此刻」这件事是其中之一 */
+.card {
+  padding: var(--space-5);
+  border-radius: var(--radius-box);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+
+.now-step {
+  margin: 0;
+  font-size: var(--text-lead);
+  line-height: var(--leading);
+}
+
+.now-reason {
+  margin: var(--space-2) 0 0;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.now-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+button.primary {
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  background: var(--accent);
+  color: var(--bg-solid);
+  font: inherit;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+button.primary:hover { opacity: 0.88; }
+
+button.quiet {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: var(--text-aux);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+button.quiet:hover { color: var(--fg); }
+
+.date-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-aux);
+  color: var(--fg-dim);
+}
+
+.date-band .stamp { min-width: 0; margin-right: var(--space-2); }
+
+.energy {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-aux);
+  color: var(--fg-faint);
+}

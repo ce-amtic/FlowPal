@@ -1,0 +1,64 @@
+.unassigned { margin-bottom: var(--space-8); }
+
+.group { margin-bottom: var(--space-6); }
+
+.group-label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-aux);
+  font-weight: 400;
+  color: var(--fg-dim);
+}
+
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* 项目是可以整体点开的对象，所以它是卡片；条目行不是 */
+.project-card {
+  display: block;
+  padding: var(--space-4);
+  border-radius: var(--radius-box);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.project-card:hover { background: var(--card-hover); }
+
+.project-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.project-name { font-size: var(--text-lead); }
+
+/* 「多久没动」是这一页的核心，但语气要平——它是事实，不是责备 */
+.idle {
+  flex: 0 0 auto;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.project-note {
+  margin: var(--space-2) 0 0;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+/* 详情页顶部那句状态，和下面第一组之间要有呼吸 */
+.project-lead { margin-bottom: var(--space-6); }
+
+.project-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}

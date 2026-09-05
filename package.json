@@ -7,6 +7,7 @@
     "dev": "pnpm dev:app & sleep 3 && pnpm dev:desktop",
     "dev:server": "tsx watch packages/server/src/main.ts",
     "dev:app": "pnpm --filter @flowpal/app dev",
+    "dev:mock": "pnpm --filter @flowpal/app dev:mock",
     "dev:desktop": "pnpm --filter @flowpal/desktop dev",
     "check:fixtures": "pnpm --filter @flowpal/server check:fixtures",
     "check:tokens": "pnpm --filter @flowpal/app check:tokens",

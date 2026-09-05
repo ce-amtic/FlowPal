@@ -1,0 +1,12 @@
+.thought {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.thought a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.thought a:hover { color: var(--accent); }
