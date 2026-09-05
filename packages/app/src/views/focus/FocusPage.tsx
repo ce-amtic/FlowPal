@@ -30,6 +30,9 @@ const MAX_MINUTES = 90
 const STEP_MINUTES = 5
 const DEFAULT_MINUTES = 25
 
+/** 开场白留多久。够读完并照着做一次，不够久到变成屏幕上的一件摆设 */
+const OPENING_FADES_AFTER_MS = 60_000
+
 /** 从「此刻」带过来的目标。带的是当时屏幕上那一步，不是第一步——按过「更小的一步」就该算数 */
 type Target = { itemId: string; title: string; step: string }
 
@@ -42,6 +45,17 @@ export function FocusPage() {
   const target = useLocation().state?.focus as Target | undefined
   const [minutes, setMinutes] = useState(DEFAULT_MINUTES)
   const [phase, setPhase] = useState<Phase>({ name: 'ready' })
+  const [openingShown, setOpeningShown] = useState(true)
+
+  /*
+   * 开场那一句在一分钟后退场。它的职责是把人送进来，而人已经进来了；再留着
+   * 就成了噪音——这一屏此后只该有那件事和时间。
+   */
+  useEffect(() => {
+    if (phase.name !== 'running') return
+    const id = setTimeout(() => setOpeningShown(false), OPENING_FADES_AFTER_MS)
+    return () => clearTimeout(id)
+  }, [phase.name])
 
   if (!target) return <Blank />
 
@@ -51,11 +65,21 @@ export function FocusPage() {
 
       {/*
         这一段是关于那件事的，不是关于那一步的。那一步的职责是把开始的门槛降下来，
-        按下「开始」的那一刻它已经尽职了——所以它在这里退成一行小字，事情的名字
-        接管主体。「已完成」问的也就名正言顺地是那件事。
+        所以它退成一行小字，写成「从……开始」——一句开场白，不是这一段的内容。
+        事情的名字接管主体，「已完成」问的也就名正言顺地是那件事。
       */}
       <p className="focus-title">{target.title}</p>
-      {phase.name !== 'ending' && <p className="focus-step">{target.step}</p>}
+      <AnimatePresence initial={false}>
+        {phase.name !== 'ending' && openingShown && (
+          <motion.p
+            className="focus-step"
+            exit={{ opacity: 0, height: 0, marginTop: 0 }}
+            transition={transition.slow}
+          >
+            从「{target.step}」开始
+          </motion.p>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence mode="wait" initial={false}>
         {phase.name === 'ready' && (

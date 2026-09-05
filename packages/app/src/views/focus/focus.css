@@ -29,8 +29,10 @@
   line-height: var(--leading-tight);
 }
 
+/* 退场时高度收到零，所以要裁剪：否则字会在收拢的框外面露一截 */
 .focus-step {
   margin: 0;
+  overflow: hidden;
   color: var(--fg-dim);
   line-height: var(--leading-tight);
 }
