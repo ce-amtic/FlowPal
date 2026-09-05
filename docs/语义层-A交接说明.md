@@ -110,5 +110,6 @@ pnpm dev:server       # 只起 server 调管道
 
 ## 8. 其他注意点
 
+- **待确认门槛已收紧**：只有「进度没有所属项目」会以 `needs_confirm` 落库；`confidence: low` 不再自动进待确认，照常落 `active`，由界面标出来、用户随手改。
 - `MergePlan` / `applyPlans` 已删除，没有兼容路径；旧代码里再 import 会直接 typecheck 红。
 - `fixtures/06-progress` 已翻面为 `active` 且挂「高等数学」；07–10 是三条合并对照。

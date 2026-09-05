@@ -146,6 +146,25 @@ console.log('\n静态检查')
 }
 
 {
+  // 待确认门槛是「错了不可逆」，不是「模型没把握」：low confidence 照常 active，不因此进待确认。
+  const db = openDb(':memory:')
+  const calendar = CalendarSchema.parse(JSON.parse(readFileSync(join(repoRoot, 'data/calendar.json'), 'utf8')))
+  const ctx = createCtx(calendar, '2026-09-05T10:00:00+08:00')
+  const fragment = insertFragment(db, ctx, { source: 'paste', rawType: 'text', rawText: '看到班群转发的消息：计算机等级考试报名可能快截止了，不确定。' })
+  const low = executeAgentTool(db, ctx, fragment, 'createItem', {
+    type: 'task', title: '计算机等级考试报名', starts_at: null, due_at: null,
+    date_precision: null, date_raw: null, recurrence: null, location: null,
+    confidence: 'low', date_confidence: 'low',
+    citations: [{ field: 'title', quote: '计算机等级考试报名' }],
+    project: { kind: 'none' },
+  })
+  const item = listItems(db)[0]
+  assert(item?.status === 'active', 'low confidence 不因此进待确认，照常落 active', item?.status ?? '无条目')
+  assert(low.touched?.needsConfirm !== true, 'low confidence 的 createItem 不计入待确认')
+  db.close()
+}
+
+{
   const db = openDb(':memory:')
   const calendar = CalendarSchema.parse(JSON.parse(readFileSync(join(repoRoot, 'data/calendar.json'), 'utf8')))
   const ctx = createCtx(calendar, '2026-09-05T10:00:00+08:00')
