@@ -21,6 +21,7 @@ import {
 } from '../store/runs.ts'
 import { insertFocusSession, listFocusSessions } from '../store/focus.ts'
 import { clearNowCache, getNowCache, setNowCache } from '../store/now-cache.ts'
+import { getSetting, setSetting } from '../store/settings.ts'
 import { extract } from '../pipeline/extract.ts'
 import { mapStructured } from '../pipeline/map-structured.ts'
 import { buildContext } from '../context/build.ts'
@@ -364,6 +365,35 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
           : null,
       }
     }
+  })
+
+  /**
+   * 应用设置。首次启动的向导与设置页写这里，buildContext 从这里读作息。
+   *
+   * 键是白名单：设置是给人填的少数几项，不是一个任人写的键值仓库；写错一个键
+   * 不会报错、只会让读它的那一侧永远读到空，而那种错很难被发现。
+   */
+  const SETTING_KEYS = ['chronotype_workday_wake', 'chronotype_restday_wake', 'onboarded_at'] as const
+
+  app.get('/api/settings', (c) => c.json({
+    settings: Object.fromEntries(SETTING_KEYS.map((k) => [k, getSetting(db, k)])),
+  }))
+
+  app.patch('/api/settings', async (c) => {
+    const ctx = ctxOf()
+    const body = z.record(z.string(), z.string()).safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '设置参数不对', issues: body.error.issues }, 400)
+
+    const unknown = Object.keys(body.data).filter((k) => !SETTING_KEYS.includes(k as never))
+    if (unknown.length > 0) return c.json({ error: `没有这些设置项：${unknown.join(', ')}` }, 400)
+
+    for (const [key, value] of Object.entries(body.data)) setSetting(db, ctx, key, value)
+    // 作息变了，「此刻」的判断依据就变了，那份缓存不再作数
+    clearNowCache(db)
+    broadcastChanged(ctx.now)
+    return c.json({
+      settings: Object.fromEntries(SETTING_KEYS.map((k) => [k, getSetting(db, k)])),
+    })
   })
 
   /** 想法页：倒序的流，既没有时间也不属于项目。 */

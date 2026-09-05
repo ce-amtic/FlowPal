@@ -7,6 +7,9 @@ import { AGENDA, FRAGMENTS, HISTORY, ITEMS, NOW, PROJECTS, PROJECT_CARDS, RECENT
  *
  * 写操作不落任何地方：样例模式是用来对版式的，不是用来试流程的。
  */
+/** 只用来表示「向导早就走完了」，具体是哪天不重要，界面上也不显示 */
+const SETTLED_LONG_AGO = '2026-08-16T09:00:00+08:00'
+
 const delay = <T>(value: T): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), 120))
 
@@ -58,6 +61,17 @@ export const mockApi: Api = {
     const items = ITEMS.filter((i) => i.status === 'needs_confirm')
     return delay({ items, count: items.length })
   },
+
+  // 样例模式下向导已经走完，否则一开界面就是欢迎页，对不了版式
+  getSettings: () => delay({
+    settings: {
+      chronotype_workday_wake: '07:30',
+      chronotype_restday_wake: '10:00',
+      onboarded_at: SETTLED_LONG_AGO,
+    },
+  }),
+
+  patchSettings: () => Promise.reject(new Error('样例模式下不写入数据。')),
 
   listThoughts: () => delay({
     thoughts: ITEMS.filter((i) => i.type === 'thought' && i.status === 'active'),

@@ -1,0 +1,89 @@
+/*
+ * 首次启动。整窗一屏，没有标题栏导航——这时候还没有东西可导航。
+ *
+ * 竖向居中而不是贴顶：这一屏只有一件事要做，居中的东西读起来像被端到面前，
+ * 贴顶的东西读起来像一份要填的表。
+ */
+.welcome {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  padding: var(--space-10) var(--space-8);
+  text-align: center;
+  -webkit-app-region: drag;
+}
+
+/* 拖动区里的可点元素必须显式退出，否则点不动 */
+.welcome button { -webkit-app-region: no-drag; }
+
+/* 形象从大缩到小，是这一屏唯一的转场：它先出场，然后让位给问题 */
+.welcome-figure { display: flex; }
+
+.welcome-panel {
+  width: min(var(--content-max), 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.welcome-step {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+.welcome-title {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+.welcome-lead {
+  margin: 0;
+  max-width: 34em;
+  color: var(--fg-dim);
+  line-height: var(--leading);
+}
+
+.welcome-go {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-10);
+}
+
+.welcome-aside {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+/* 答案是一排可点的时刻。第一次打开一个应用时，点一下比调转盘容易 */
+.welcome-choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.welcome-choice {
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-5);
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-lead);
+  line-height: var(--leading-tight);
+  cursor: pointer;
+  box-shadow: var(--card-shadow);
+  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.welcome-choice:hover { background: var(--card-hover); transform: translateY(-1px); }
+.welcome-choice:active { transform: translateY(0); }
+.welcome-choice:disabled { cursor: default; opacity: 0.4; transform: none; }

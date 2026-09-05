@@ -100,6 +100,18 @@ export type AgendaView = {
   recurring: AgendaEntry[]
 }
 
+/**
+ * 应用设置。键由服务端白名单，写错的键会被 400 挡回来。
+ *
+ * 作息两问的出处是 MCTQ 那两道题，`buildContext` 读它们；没填时「此刻」只能拿到
+ * 「作息时间未知（先验，猜的）」。`onboarded_at` 有值就表示向导走完了。
+ */
+export type Settings = {
+  chronotype_workday_wake: string | null
+  chronotype_restday_wake: string | null
+  onboarded_at: string | null
+}
+
 export type Api = {
   listItems: () => Promise<{ items: ItemWithSources[] }>
   getItem: (id: string) => Promise<{ item: ItemWithSources; history: ItemHistoryRow[] }>
@@ -120,6 +132,8 @@ export type Api = {
   getProject: (id: string) => Promise<{ project: Project; items: ItemWithSources[] }>
   listConfirmations: () => Promise<{ items: ItemWithSources[]; count: number }>
   listThoughts: () => Promise<{ thoughts: ItemWithSources[] }>
+  getSettings: () => Promise<{ settings: Settings }>
+  patchSettings: (patch: Partial<Record<keyof Settings, string>>) => Promise<{ settings: Settings }>
   serverUrl: string
 }
 
@@ -148,6 +162,8 @@ const realApi: Api = {
   getProject: (id) => call(`/api/projects/${id}`),
   listConfirmations: () => call('/api/confirmations'),
   listThoughts: () => call('/api/thoughts'),
+  getSettings: () => call('/api/settings'),
+  patchSettings: (patch) => call('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
   serverUrl: BASE,
 }
 
@@ -173,4 +189,5 @@ export const queryKeys = {
   project: (id: string) => ['projects', id] as const,
   confirmations: ['confirmations'] as const,
   thoughts: ['thoughts'] as const,
+  settings: ['settings'] as const,
 }

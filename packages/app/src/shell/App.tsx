@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
+import { useQuery } from '@tanstack/react-query'
+import { api, queryKeys } from '../api.ts'
 import { inElectron } from '../bridge.ts'
 import { transition } from '../tokens/motion.ts'
 import { TitleBar } from './TitleBar.tsx'
@@ -16,6 +18,7 @@ import { ThoughtsPage } from '../views/thoughts/ThoughtsPage.tsx'
 import { ItemPage } from '../views/item/ItemPage.tsx'
 import { FocusPage } from '../views/focus/FocusPage.tsx'
 import { SettingsPage } from '../views/settings/SettingsPage.tsx'
+import { WelcomePage } from '../views/welcome/WelcomePage.tsx'
 import './shell.css'
 
 /**
@@ -30,10 +33,22 @@ export function App() {
 
   useServerEvents()
 
+  const settings = useQuery({ queryKey: queryKeys.settings, queryFn: api.getSettings })
+
   useEffect(() => {
     // 浏览器里没有窗口毛玻璃，body 要自己上底色；红绿灯的位置也不用留。
     document.body.classList.toggle('in-electron', inElectron)
   }, [])
+
+  /*
+   * 设置还没取到时先什么都不画。
+   *
+   * 猜一个默认会猜错一半：当成没走过向导，老用户每次启动都被欢迎一次；当成走过了，
+   * 新用户会先看到一屏空的「此刻」再被弹去向导。取一次设置是本机的事，很快。
+   */
+  if (settings.isLoading) return null
+  // 取失败不等于没走过向导。连不上 server 时进壳，让每一页自己把错误说出来
+  if (settings.data && !settings.data.settings.onboarded_at) return <WelcomePage />
 
   return (
     <div className="shell">
