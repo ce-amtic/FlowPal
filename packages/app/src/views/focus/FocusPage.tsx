@@ -10,7 +10,7 @@ export function FocusPage() {
   return (
     <>
       <h1 className="page-title">专注</h1>
-      <Empty>先从「此刻」挑一件事。</Empty>
+      <Empty>先在「此刻」选一件事。</Empty>
     </>
   )
 }

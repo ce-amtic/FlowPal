@@ -236,25 +236,29 @@ export const NOW: NowView = {
   primary: {
     itemId: 'i_mail',
     title: '把实习申请的材料交上去',
-    reason: `${cnWeekday(2)}截止，还剩 2 天。本周另有高数期中与组会材料。`,
+    why: `${cnWeekday(2)}截止，还剩 2 天。本周另有高数期中与组会材料。`,
     steps: ['把邮件草稿打开，只填收件人', '只打开草稿，不用写', '先把要附的两个文件找出来'],
   },
   alternates: [
     {
       itemId: 'i_resume',
       title: '把简历第二页的实习经历压到三行',
-      reason: '实习申请这个项目 7 天没动了，而它是这周唯一有硬截止的一件。',
+      why: '实习申请这个项目 7 天没动了，而它是这周唯一有硬截止的一件。',
       steps: ['打开简历，读一遍第二页', '只读那一段，不改'],
     },
     {
       itemId: 'i_seminar',
       title: '组会材料',
-      reason: '今天 18:00 要用，每周一次。',
+      why: '今天 18:00 要用，每周一次。',
       steps: ['把上次的模板复制一份', '只打开模板'],
     },
   ],
   energy: '上午四节连堂上到中午，现在离你的高峰还有六个小时。',
-  basis: ['i_mail', 'i_midterm', 'i_seminar'],
+  basis: [
+    { itemId: 'i_mail', quote: `${cnWeekday(2)}之前`, field: 'date_raw' },
+    { itemId: 'i_midterm', quote: `${cn(10)} 14:00`, field: 'starts_at' },
+    { itemId: null, quote: '上午 8:00–12:00 连排四节', field: null },
+  ],
 }
 
 export const PROJECT_CARDS: ProjectCard[] = [
