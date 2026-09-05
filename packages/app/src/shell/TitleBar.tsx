@@ -38,11 +38,11 @@ export function TitleBar({ onOpenPending }: { onOpenPending: () => void }) {
         {/* 样例数据必须看得见。最怕的失败是拿着它演了却不知道 */}
         {usingMock && <span className="tag mock">样例数据</span>}
 
-        {/* 投放口在「最近」页顶上，这里只是把人和焦点一起带过去 */}
+        {/* 记录口在「此刻」，这里只是把人和焦点一起带回去 */}
         <button
           className="icon-button"
           aria-label="记录"
-          onClick={() => navigate('/recent', { state: { focusComposer: true } })}
+          onClick={() => navigate('/now', { state: { focusComposer: true } })}
         >
           <Plus size={ICON.size} strokeWidth={ICON.stroke} />
         </button>

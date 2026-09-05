@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Image, FileText, Mic, CalendarDays } from 'lucide-react'
 import { api, queryKeys, type RecentEntry } from '../../api.ts'
@@ -6,7 +6,6 @@ import { ICON } from '../../tokens/icons.ts'
 import { DayLabel } from '../../shell/DayLabel.tsx'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
 import { formatTime } from '../../lib/format.ts'
-import { Composer } from './Composer.tsx'
 import './recent.css'
 
 /**
@@ -25,15 +24,10 @@ export function RecentPage() {
     queryFn: api.listRecent,
   })
 
-  // 标题栏的投放按钮把焦点带过来，省掉一次点击
-  const focusComposer = useLocation().state?.focusComposer === true
-
   const days = groupByDay(data?.recent ?? [])
 
   return (
     <>
-      <Composer autoFocus={focusComposer} />
-
       {isLoading && <Loading />}
       {error && <ErrorState error={error} onRetry={() => refetch()} />}
       {!isLoading && !error && days.length === 0 && <Empty>还没有记录。</Empty>}
