@@ -26,6 +26,105 @@
   font-size: var(--text-aux);
 }
 
+/*
+ * 凭据：那一条的原文，逐字的。
+ *
+ * 它和 .row-note 语义不同——那是模型的判断，这是用户当初自己写下的话。所以缩进
+ * 到标题那一列下面，成为上一行的附属，并且带引号：一眼看出是引来的，不是系统说的。
+ *
+ * 选择器压过 .plain-list 给无 .row 子项的那份内边距，两个文件谁先加载都不影响。
+ */
+.markup .plain-list li.markup-quote {
+  padding: 0 0 var(--space-2) calc(var(--space-3) + 16px + var(--space-3));
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+  line-height: var(--leading);
+}
+
+/* 按天排开时，每一天之间要断开，否则几天连成一片看不出分界 */
+.markup-day + .markup-day { margin-top: var(--space-5); }
+
+/*
+ * 可以立刻动手的那一步：一句话加一个按钮。
+ *
+ * 「此刻」那张卡上是同一副样子——同一个动作在两处必须长成同一个样子，
+ * 否则用户要学两遍。
+ */
+.markup-start {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.markup-start + .markup-start { margin-top: var(--space-3); }
+
+.markup-step {
+  flex: 1 1 auto;
+  line-height: var(--leading);
+}
+
+/* 比「此刻」那张卡上的小一号：它长在一段话里，不是整页的落点 */
+.markup-go {
+  flex: 0 0 auto;
+  min-height: var(--target-min);
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  background: var(--accent);
+  color: var(--bg-solid);
+  font: inherit;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.markup-go:hover { opacity: 0.88; }
+
+/*
+ * 项目那一行。观感借项目页的 .project-* 那套，这里只管它长在一段话里的位置：
+ * 那一页靠负外边距把命中区铺满整栏，回复里没有那一栏，所以收回来。
+ */
+.markup-project {
+  display: block;
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-box);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.markup-project:hover { background: var(--row-hover); }
+
+.markup-project + .markup-project { margin-top: var(--space-2); }
+
+/* 项目页上这几处是块级元素，这里是行内元素，得自己撑成一行 */
+.markup-project .project-head,
+.markup-project .project-next,
+.markup-project .project-note { display: flex; }
+
+.markup-project .project-next { flex-wrap: wrap; }
+
+.markup-project .project-note {
+  margin-top: var(--space-2);
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+/* 算出来的数：项目的名字加那个数，一行说完 */
+.markup-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.markup-stat + .markup-stat { margin-top: var(--space-2); }
+
+.markup-metric {
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
 .markup-group > .group-label { margin-bottom: var(--space-2); }
 
 /*
