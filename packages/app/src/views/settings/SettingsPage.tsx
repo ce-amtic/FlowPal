@@ -10,7 +10,7 @@ export function SettingsPage() {
   return (
     <>
       <h1 className="page-title">设置</h1>
-      <Empty>还没有可配置的项。</Empty>
+      <Empty>暂无可配置项。</Empty>
     </>
   )
 }

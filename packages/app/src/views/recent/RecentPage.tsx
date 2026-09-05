@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Image, FileText, Mic, CalendarDays } from 'lucide-react'
 import { api, queryKeys, type RecentEntry } from '../../api.ts'
@@ -6,6 +6,7 @@ import { ICON } from '../../tokens/icons.ts'
 import { DayLabel } from '../../shell/DayLabel.tsx'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
 import { formatTime } from '../../lib/format.ts'
+import { Composer } from './Composer.tsx'
 import './recent.css'
 
 /**
@@ -24,14 +25,19 @@ export function RecentPage() {
     queryFn: api.listRecent,
   })
 
-  if (isLoading) return <Loading />
-  if (error) return <ErrorState error={error} onRetry={() => refetch()} />
+  // 标题栏的投放按钮把焦点带过来，省掉一次点击
+  const focusComposer = useLocation().state?.focusComposer === true
 
   const days = groupByDay(data?.recent ?? [])
-  if (days.length === 0) return <Empty>还没有投放。</Empty>
 
   return (
     <>
+      <Composer autoFocus={focusComposer} />
+
+      {isLoading && <Loading />}
+      {error && <ErrorState error={error} onRetry={() => refetch()} />}
+      {!isLoading && !error && days.length === 0 && <Empty>还没有记录。</Empty>}
+
       {days.map(([day, entries]) => (
         <section key={day} className="day">
           <DayLabel day={day} />
@@ -69,12 +75,13 @@ function Drop({ entry: { fragment, run, items } }: { entry: RecentEntry }) {
           </ul>
         )}
 
-        {/* 零条与失败都要说话：没有落点的投放，看起来和「坏了」一模一样 */}
+        {/*
+          零条与失败都要说话：没有落点的投放，看起来和「坏了」一模一样。
+          失败这里没有「重试」——服务端没有重跑某条碎片的口，摆一个按不动的
+          按钮比不摆更糟。原文已经存住了，重投一次就是。
+        */}
         {items.length === 0 && run?.message && (
-          <p className={failed ? 'drop-note drop-failed' : 'drop-note'}>
-            {run.message}
-            {failed && <button className="quiet">重试</button>}
-          </p>
+          <p className={failed ? 'drop-note drop-failed' : 'drop-note'}>{run.message}</p>
         )}
       </div>
     </li>

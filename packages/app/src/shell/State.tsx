@@ -15,7 +15,7 @@ export function Empty({ children }: { children: React.ReactNode }) {
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (
     <div className="state-error">
-      <div>没能取到数据。</div>
+      <div>加载失败。</div>
       <pre>{error instanceof Error ? error.message : String(error)}</pre>
       {onRetry && <button onClick={onRetry}>重试</button>}
     </div>

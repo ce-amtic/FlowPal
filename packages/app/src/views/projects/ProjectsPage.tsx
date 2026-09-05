@@ -28,7 +28,7 @@ export function ProjectsPage() {
   const unclassified = data?.unclassified ?? []
 
   if (cards.length === 0 && unclassified.length === 0) {
-    return <Empty>还没有项目。同步课表之后，每门课会成为一个。</Empty>
+    return <Empty>还没有项目。同步课表后，每门课各自成为一个项目。</Empty>
   }
 
   return (

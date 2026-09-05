@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Settings } from 'lucide-react'
+import { Plus, Settings } from 'lucide-react'
 import { api, queryKeys, usingMock } from '../api.ts'
 import { ICON } from '../tokens/icons.ts'
 
@@ -37,6 +37,15 @@ export function TitleBar({ onOpenPending }: { onOpenPending: () => void }) {
       <div className="right">
         {/* 样例数据必须看得见。最怕的失败是拿着它演了却不知道 */}
         {usingMock && <span className="tag mock">样例数据</span>}
+
+        {/* 投放口在「最近」页顶上，这里只是把人和焦点一起带过去 */}
+        <button
+          className="icon-button"
+          aria-label="记录"
+          onClick={() => navigate('/recent', { state: { focusComposer: true } })}
+        >
+          <Plus size={ICON.size} strokeWidth={ICON.stroke} />
+        </button>
 
         {pending > 0 && (
           <button className="icon-button badge" onClick={onOpenPending}>

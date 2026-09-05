@@ -67,7 +67,7 @@ export type NowPick = {
   title: string
   /** 为什么是它。必须落在具体的处境上 */
   reason: string
-  /** 第一步；其后是更小的切口。「更小的一步」在这里面往后走 */
+  /** 第一步；其后是更小的切口。「更小的一步」在这里面往后走。语义层保证至少两级 */
   steps: string[]
 }
 
@@ -76,7 +76,7 @@ export type NowView = {
   alternates: NowPick[]
   /** 模型的一句判断，必须引用一条给它的事实 */
   energy: string | null
-  /** 这次输出用了哪些材料 */
+  /** 这次输出用了哪些材料：条目 id，或逐字事实 */
   basis: string[]
 }
 
@@ -112,6 +112,8 @@ export type Api = {
     rawBlobPath?: string
   }) => Promise<{ fragment: Fragment; run: Run; items: ItemWithSources[] }>
   getNow: () => Promise<NowView>
+  /** 「重新想一个」：只清缓存，下一次取数重新生成 */
+  refreshNow: () => Promise<{ ok: boolean }>
   listRecent: () => Promise<{ recent: RecentEntry[] }>
   getAgenda: () => Promise<AgendaView>
   listProjects: () => Promise<{ projects: ProjectCard[]; unclassified: ItemWithSources[] }>
@@ -139,6 +141,7 @@ const realApi: Api = {
   patchItem: (id, patch) => call(`/api/items/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   throwIn: (body) => call('/api/fragments', { method: 'POST', body: JSON.stringify(body) }),
   getNow: () => call('/api/now'),
+  refreshNow: () => call('/api/now/refresh', { method: 'POST' }),
   listRecent: () => call('/api/recent'),
   getAgenda: () => call('/api/agenda'),
   listProjects: () => call('/api/projects'),

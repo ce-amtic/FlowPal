@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api, queryKeys } from '../../api.ts'
 import { transition } from '../../tokens/motion.ts'
@@ -25,6 +25,21 @@ export function NowPage() {
   const [pickIndex, setPickIndex] = useState(0)
   const [stepIndex, setStepIndex] = useState(0)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  /**
+   * 「重新想一个」：清掉服务端那份缓存再重取。
+   *
+   * 和「换一件」不是一回事——换一件在这次返回的候选里走，不花钱也不等；
+   * 重新想一个是让模型重新看一遍处境，所以它排在候选走完之后。
+   */
+  const rethink = useMutation({
+    mutationFn: api.refreshNow,
+    onSuccess: () => {
+      setPickIndex(0)
+      return queryClient.invalidateQueries({ queryKey: queryKeys.now })
+    },
+  })
 
   // 换了一件事，切口从最粗的那一个重新开始
   useEffect(() => setStepIndex(0), [pickIndex])
@@ -34,7 +49,7 @@ export function NowPage() {
 
   // primary 为 null 是库里没有可推的，不是出错：不调模型，请用户先扔点东西进来
   if (!data?.primary) {
-    return <Empty>还没有可以开始的事。扔点什么进来，或者从日程里挑一件。</Empty>
+    return <Empty>没有可以开始的事。先记录一条，或从日程里选一件。</Empty>
   }
 
   const candidates = [data.primary, ...data.alternates]
@@ -85,9 +100,14 @@ export function NowPage() {
               换一件
             </button>
           )}
+          <button className="quiet" disabled={rethink.isPending} onClick={() => rethink.mutate()}>
+            {rethink.isPending ? '正在判断' : '重新判断'}
+          </button>
           <Link className="quiet now-open" to={`/items/${candidate.itemId}`}>出处</Link>
         </motion.div>
       </motion.div>
+
+      {rethink.error && <ErrorState error={rethink.error} />}
 
       <Upcoming />
     </div>

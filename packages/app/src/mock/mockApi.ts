@@ -31,9 +31,11 @@ export const mockApi: Api = {
     return delay({ item })
   },
 
-  throwIn: () => Promise.reject(new Error('样例模式不写入。要试投放请关掉它。')),
+  throwIn: () => Promise.reject(new Error('样例模式下不写入数据。')),
 
   getNow: () => delay(NOW),
+
+  refreshNow: () => Promise.reject(new Error('样例模式下不重新判断。')),
 
   listRecent: () => delay({ recent: RECENT }),
 
