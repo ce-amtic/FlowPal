@@ -2,33 +2,26 @@ import { z } from 'zod'
 
 /**
  * 「此刻」的一次只读生成。不是 agent 循环：不带工具，只从 buildContext 的事实里挑一件。
- * basis 是这次输出用了哪些材料——列条目 id 或逐字事实，不是 item_citations。
+ * 与 packages/app/src/api.ts 的 NowPick 对齐：reason + steps（一串越来越小的切口）。
  */
 export const NowChoice = z.object({
   itemId: z.string(),
   title: z.string(),
-  /** 一句说中处境的话：为什么是它。 */
-  why: z.string(),
-  /** 足够小的第一步，可执行；给不出有出处的具体步骤就降承诺。 */
-  step: z.string(),
-}).strict()
-
-export const NowBasis = z.object({
-  itemId: z.string().nullable(),
-  /** 来自 buildContext 或条目原文的逐字片段。 */
-  quote: z.string(),
-  field: z.string().nullable(),
+  /** 一句说中处境的话：为什么是它。对应前端的 reason。 */
+  reason: z.string(),
+  /** 第一步；其后是更小的切口。「更小的一步」在这个数组里往后走。至少给两级。 */
+  steps: z.array(z.string()).min(2),
 }).strict()
 
 export const NowOutput = z.object({
   primary: NowChoice.nullable(),
   alternates: z.array(NowChoice),
   energy_reading: z.string(),
-  basis: z.array(NowBasis),
+  /** 这次输出用了哪些材料：条目 id，或来自 buildContext 的逐字事实。 */
+  basis: z.array(z.string()),
 }).strict()
 
 export type NowChoice = z.infer<typeof NowChoice>
-export type NowBasis = z.infer<typeof NowBasis>
 export type NowOutput = z.infer<typeof NowOutput>
 
 export function nowJsonSchema() {
