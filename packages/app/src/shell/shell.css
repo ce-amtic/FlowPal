@@ -1,31 +1,4 @@
-/*
- * 壳的样式。这里只处理窗框交接处与基础观感——
- * 布局、陪伴形象、主界面长什么样都还没定，不在这里替它们做决定。
- */
-
-:root {
-  --bg: transparent;            /* 交给窗口的毛玻璃 */
-  --bg-solid: #faf9f7;          /* 没有毛玻璃时（浏览器 / Windows）的底 */
-  --fg: #1c1b19;
-  --fg-dim: #8a8580;
-  --line: rgba(0, 0, 0, 0.08);
-  --field: rgba(255, 255, 255, 0.6);
-  --field-focus: rgba(255, 255, 255, 0.95);
-  --accent: #b4622f;
-  --titlebar: 44px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-solid: #1d1c1a;
-    --fg: #ece9e4;
-    --fg-dim: #86807a;
-    --line: rgba(255, 255, 255, 0.1);
-    --field: rgba(255, 255, 255, 0.06);
-    --field-focus: rgba(255, 255, 255, 0.11);
-    --accent: #e08b56;
-  }
-}
+/* 壳：标题栏（同时是导航与拖动区）加一块滚动的正文。窗口里只有这一条横线。 */
 
 * { box-sizing: border-box; }
 
@@ -35,13 +8,12 @@ body {
   margin: 0;
   background: var(--bg-solid);
   color: var(--fg);
-  font: 14px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI',
-        'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  font: var(--text-body) / var(--leading) var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
 /* Electron 里窗口自带毛玻璃，body 得让开，否则盖住它 */
-body.in-electron { background: var(--bg); }
+body.in-electron { background: var(--bg-window); }
 
 .shell {
   display: flex;
@@ -49,32 +21,206 @@ body.in-electron { background: var(--bg); }
   height: 100%;
 }
 
-/* 标题栏被隐藏了，这条就是拖动窗口的地方；红绿灯压在左边，所以文字往右让 */
+/* ── 标题栏 ─────────────────────────────────────────────── */
+
 .titlebar {
   -webkit-app-region: drag;
-  flex: 0 0 var(--titlebar);
+  flex: 0 0 var(--titlebar-h);
   display: flex;
   align-items: center;
-  padding: 0 16px 0 92px;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  color: var(--fg-dim);
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
   user-select: none;
 }
 
-.titlebar .spacer { flex: 1; }
-.titlebar .hint { font-size: 11px; opacity: 0.75; }
-
 /* 浏览器里没有红绿灯，不用留那块位置 */
-body:not(.in-electron) .titlebar { padding-left: 16px; }
+body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
 
-/* 拖动区里的可点击元素必须显式退出，否则点不动 */
-.titlebar button, .titlebar input { -webkit-app-region: no-drag; }
-
-.body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 24px 32px;
+.titlebar .right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.inner { max-width: 620px; margin: 0 auto; }
+/* 拖动区里的可点元素必须显式退出，否则点不动 */
+.nav, .titlebar .right { -webkit-app-region: no-drag; }
+
+.nav {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.nav a {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-aux);
+  line-height: var(--leading-tight);
+  color: var(--fg-dim);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.nav a:hover { color: var(--fg); }
+
+.nav a.active {
+  color: var(--fg);
+  background: var(--card);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: var(--text-aux);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.icon-button:hover { color: var(--fg); background: var(--card); }
+
+/* 待确认角标：只在有内容时出现 */
+.badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.badge:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* ── 正文 ───────────────────────────────────────────────── */
+
+.page {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--space-6) var(--space-12);
+}
+
+.page-inner {
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+
+.page-title {
+  margin: var(--space-2) 0 var(--space-5);
+  font-size: var(--text-title);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+/* ── 三种状态：载入、出错、空 ───────────────────────────── */
+
+.state {
+  padding: var(--space-10) 0;
+  color: var(--fg-dim);
+  font-size: var(--text-body);
+}
+
+.state-empty { color: var(--fg-faint); }
+
+.state-error {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-box);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-aux);
+}
+
+.state-error pre {
+  margin: var(--space-2) 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  max-height: 160px;
+  overflow: auto;
+}
+
+/* ── 列表与字段 ─────────────────────────────────────────── */
+
+.day { margin-bottom: var(--space-6); }
+
+.day-label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-aux);
+  font-weight: 400;
+  color: var(--fg-dim);
+}
+
+.stamp {
+  display: inline-block;
+  min-width: 48px;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.fields dt { color: var(--fg-dim); font-size: var(--text-aux); }
+.fields dd { margin: 0; }
+
+/* ── 浮层：待确认 ───────────────────────────────────────── */
+
+.overlay-scrim {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: var(--space-12);
+}
+
+.overlay {
+  width: min(var(--content-max), calc(100% - var(--space-8)));
+  padding: var(--space-4);
+  border-radius: var(--radius-box);
+  background: var(--card-hover);
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(20px);
+}
+
+.overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-aux);
+  color: var(--fg-dim);
+}
+
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.plain-list li { padding: var(--space-2) 0; }
+
+.plain-list a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.plain-list a:hover { color: var(--accent); }
+
+.state-error button {
+  margin-top: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  background: var(--danger);
+  color: var(--bg-solid);
+  font: inherit;
+  cursor: pointer;
+}

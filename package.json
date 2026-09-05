@@ -9,6 +9,8 @@
     "dev:app": "pnpm --filter @flowpal/app dev",
     "dev:desktop": "pnpm --filter @flowpal/desktop dev",
     "check:fixtures": "pnpm --filter @flowpal/server check:fixtures",
+    "check:tokens": "pnpm --filter @flowpal/app check:tokens",
+    "check": "pnpm typecheck && pnpm check:tokens && pnpm check:fixtures",
     "typecheck": "pnpm -r exec tsc --noEmit"
   },
   "devDependencies": {

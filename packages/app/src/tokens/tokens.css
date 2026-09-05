@@ -1,0 +1,106 @@
+/*
+ * 设计 token —— 全 App 唯一允许出现颜色、圆角、间距、动效时长字面量的地方。
+ *
+ * 桌宠窗口与主窗口共用这一份。别处写死一个值，两边就会各长一套，
+ * 合起来是拼的。packages/app/scripts/check-tokens.ts 会扫出违例。
+ */
+
+:root {
+  /* ── 颜色：浅色 ───────────────────────────────────────── */
+  --bg-solid: #faf9f7;          /* 没有毛玻璃时的底（浏览器、Windows） */
+  --bg-window: transparent;     /* Electron 里让开，露出窗口毛玻璃 */
+
+  --fg: #1c1b19;
+  --fg-dim: #8a8580;            /* 辅助信息。层级靠灰度，不靠字重 */
+  --fg-faint: #b3aea8;          /* 空态、占位 */
+
+  --line: rgba(0, 0, 0, 0.08);
+
+  /* 卡片只用于可整体操作的对象；无描边，靠极轻的底与柔和阴影分层 */
+  --card: rgba(255, 255, 255, 0.55);
+  --card-hover: rgba(255, 255, 255, 0.75);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+
+  --field: rgba(255, 255, 255, 0.6);
+  --field-focus: rgba(255, 255, 255, 0.95);
+
+  /* 唯一的强调色，暖的低饱和。不引入第二个 */
+  --accent: #b4622f;
+  --accent-soft: rgba(180, 98, 47, 0.14);
+  --accent-line: rgba(180, 98, 47, 0.4);
+
+  --danger: #c0392b;
+  --danger-soft: rgba(192, 57, 43, 0.12);
+
+  /* ── 圆角：两个值 ─────────────────────────────────────── */
+  --radius-box: 12px;           /* 卡片、输入框、浮层 */
+  --radius-pill: 999px;         /* 标签、角标 */
+
+  /* ── 间距：4 的倍数 ───────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ── 文字：中文排版单独调，正文不加粗 ─────────────────── */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+             'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --text-aux: 12px;
+  --text-body: 14px;
+  --text-lead: 16px;
+  --text-title: 20px;
+  --text-display: 24px;
+  --leading: 1.6;
+  --leading-tight: 1.35;        /* 标题与单行 */
+
+  /* ── 动效：三档时长，一条曲线 ─────────────────────────── */
+  --dur-fast: 120ms;            /* 悬停、按下 */
+  --dur-base: 220ms;            /* 切换、展开、条目进出 */
+  --dur-slow: 400ms;            /* 形象、整块转场 */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ── 结构 ─────────────────────────────────────────────── */
+  --titlebar-h: 44px;
+  --content-max: 620px;
+  --traffic-lights-w: 76px;     /* 红绿灯占位，导航从这儿之后开始 */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-solid: #1d1c1a;
+
+    --fg: #ece9e4;
+    --fg-dim: #86807a;
+    --fg-faint: #5f5a55;
+
+    --line: rgba(255, 255, 255, 0.1);
+
+    --card: rgba(255, 255, 255, 0.05);
+    --card-hover: rgba(255, 255, 255, 0.08);
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.28);
+
+    --field: rgba(255, 255, 255, 0.06);
+    --field-focus: rgba(255, 255, 255, 0.11);
+
+    --accent: #e08b56;
+    --accent-soft: rgba(224, 139, 86, 0.16);
+    --accent-line: rgba(224, 139, 86, 0.45);
+
+    --danger: #e57365;
+    --danger-soft: rgba(229, 115, 101, 0.14);
+  }
+}
+
+/* 尊重系统的「减弱动态」。三档一起归零，不留一处例外 */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 1ms;
+    --dur-base: 1ms;
+    --dur-slow: 1ms;
+  }
+}
