@@ -8,7 +8,7 @@ import { itemHistory, listItems } from '../src/store/items.ts'
 import { listProjects } from '../src/store/projects.ts'
 import { mapStructured } from '../src/pipeline/map-structured.ts'
 import { applyMapped } from '../src/sync/apply.ts'
-import { parseSchedule } from '../src/sync/portal.ts'
+import { parseNotices, parseSchedule } from '../src/sync/portal.ts'
 import { mapPortalSchedule } from '../src/sync/map.ts'
 
 /**
@@ -160,6 +160,67 @@ assert(
   '每条引用逐字出现在拉回来的原文里',
   mapped.flatMap((m) => m.item.citations.filter((c) => !rawText.includes(c.quote)).map((c) => c.quote)).join(' / '),
 )
+
+// ── 通知的信封 ────────────────────────────────────────────────────────
+
+console.log('\n通知')
+
+const noticeBody = {
+  resultCode: 0,
+  result: {
+    total: 2,
+    data: [
+      {
+        siteArticleId: 88991,
+        articleId: 5501,
+        title: '  关于2026年秋季学期选课的通知',
+        createOrgName: '教务处',
+        publishTime: '2026-09-05 16:20:00',
+        topest: 1,
+        read: 0,
+        url: '',
+      },
+      {
+        siteArticleId: 88990,
+        articleId: 5500,
+        title: '图书馆国庆假期开放安排',
+        createOrgName: '图书馆',
+        publishTime: '2026-09-04 09:00:00',
+        topest: 0,
+        read: 1,
+        url: 'https://lib.ruc.edu.cn/notice/1',
+      },
+    ],
+  },
+}
+
+const notices = parseNotices(noticeBody)
+assert(notices.length === 2, '通知在 result.data 里，不在 result 上', `实得 ${notices.length} 条`)
+assert(
+  notices[0]?.title === '关于2026年秋季学期选课的通知',
+  '标题的前导空格去掉，否则列表左边缘参差不齐',
+  JSON.stringify(notices[0]?.title),
+)
+assert(
+  notices[0]?.id === 88991,
+  '用 siteArticleId 而不是 articleId——详情接口认的是前者',
+)
+assert(
+  notices[0]?.url === null && notices[1]?.url === 'https://lib.ruc.edu.cn/notice/1',
+  '空的 url 表示正文在门户自己这里，不是一条指向空处的链接',
+)
+
+/*
+ * 少带一个 `_p` 时门户回 HTTP 200、resultCode 1、result null。不查 resultCode
+ * 的话，那种失败在上层看起来是「今天没有通知」——一个永远不会被发现的空。
+ */
+let silentlyEmpty = false
+try {
+  parseNotices({ resultCode: 1, result: null, errorMsg: '参数错误' })
+} catch {
+  silentlyEmpty = true
+}
+assert(silentlyEmpty, 'resultCode 非 0 时抛出，不当成「今天没有通知」')
 
 // ── 落库 ──────────────────────────────────────────────────────────────
 

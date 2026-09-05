@@ -187,8 +187,8 @@ export type PortalNotice = {
 }
 
 export function parseNotices(body: unknown): PortalNotice[] {
-  const rows = unwrap(body, '通知列表')
-  if (!Array.isArray(rows)) throw new Error('通知列表的 result 不是数组')
+  const rows = unwrap(body, '通知列表').data
+  if (!Array.isArray(rows)) throw new Error(`通知列表的 result.data 是 ${typeof rows}，不是数组`)
 
   return rows.map((raw) => {
     if (raw === null || typeof raw !== 'object') throw new Error('通知列表里有一项不是对象')
@@ -232,22 +232,39 @@ export async function fetchNoticeBody(
   url.search = new URLSearchParams({ _p: SOURCE_NOTICE, domainId: '1' }).toString()
 
   const landing = await get(http, url.toString(), hops)
-  const detail = unwrap(asJson(landing, `通知 ${id} 详情`), `通知 ${id} 详情`)
-  if (detail === null || typeof detail !== 'object') return null
+  const detail = unwrap(asJson(landing, `通知 ${id} 详情`), `通知 ${id} 详情`).data
+  if (detail === null || typeof detail !== 'object') {
+    throw new Error(`通知 ${id} 详情的 result.data 是 ${typeof detail}，不是对象`)
+  }
   const content = text((detail as Record<string, unknown>).content)
   return content === '' ? null : stripHtml(content)
 }
 
 // ── 共用的小工具 ──────────────────────────────────────────────────────
 
-/** 门户大部分接口裹着 `{result, resultCode}` 这层信封。 */
-function unwrap(body: unknown, what: string): unknown {
+/**
+ * 门户大部分接口裹着 `{resultCode, result, errorMsg}` 这层信封，数据在
+ * `result.data` 里。
+ *
+ * **`resultCode` 必须查。** 这个模块失败时不改 HTTP 状态码，也不改响应形状：
+ * 少带一个 `_p`（调用来源标识）就回 HTTP 200、`resultCode: 1`、`result: null`，
+ * 既不报错也不给数据。不查这一位的话，那种失败在上层看起来是「今天没有通知」。
+ */
+function unwrap(body: unknown, what: string): Record<string, unknown> {
   if (body === null || typeof body !== 'object') {
     throw new Error(`${what}返回的不是对象，而是 ${typeof body}`)
   }
   const envelope = body as Record<string, unknown>
-  if (!('result' in envelope)) throw new Error(`${what}的返回里没有 result`)
-  return envelope.result
+  if (envelope.resultCode !== 0) {
+    throw new Error(
+      `${what}返回 resultCode=${envelope.resultCode}（成功为 0），errorMsg=${envelope.errorMsg}`,
+    )
+  }
+  const result = envelope.result
+  if (result === null || typeof result !== 'object') {
+    throw new Error(`${what} resultCode 为 0，但 result 是 ${typeof result}`)
+  }
+  return result as Record<string, unknown>
 }
 
 function text(value: unknown): string {
