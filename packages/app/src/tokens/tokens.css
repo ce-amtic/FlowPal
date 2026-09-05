@@ -82,6 +82,7 @@
   --titlebar-h: 44px;
   --content-max: 620px;
   --traffic-lights-w: 76px;     /* 红绿灯占位，导航从这儿之后开始 */
+  --window-controls-w: 140px;   /* Windows 右上角那三个按钮的覆盖层 */
 }
 
 @media (prefers-color-scheme: dark) {

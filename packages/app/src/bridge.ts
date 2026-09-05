@@ -5,6 +5,8 @@
  * 于是界面这条线不被主进程那条线阻塞。
  */
 export type FlowpalBridge = {
+  /** 主进程的 process.platform。窗口底色与窗口按钮的位置按平台分，不能一概而论 */
+  platform: string
   onHotkeyOpen: (cb: () => void) => void
   onFilesDropped: (cb: (paths: string[]) => void) => void
   readClipboard: () => Promise<string>
@@ -16,6 +18,7 @@ declare global {
 }
 
 const browserMock: FlowpalBridge = {
+  platform: 'browser',
   onHotkeyOpen: () => {},
   onFilesDropped: () => {},
   readClipboard: () => navigator.clipboard.readText(),
@@ -24,3 +27,5 @@ const browserMock: FlowpalBridge = {
 
 export const bridge: FlowpalBridge = window.flowpal ?? browserMock
 export const inElectron = window.flowpal !== undefined
+/** 只有 macOS 有窗口毛玻璃和左上角红绿灯。其余平台两样都没有，界面得知道 */
+export const onMac = bridge.platform === 'darwin'

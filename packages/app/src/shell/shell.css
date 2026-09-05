@@ -12,8 +12,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Electron 里窗口自带毛玻璃，body 得让开，否则盖住它 */
-body.in-electron { background: var(--bg-window); }
+/*
+ * Windows 与 Linux 没有窗口毛玻璃，body 自己上底色。让它透明的话，露出来的是
+ * 主进程开窗时定下的那一层——那一层不跟着系统深浅走，于是深色模式下是一片浅底。
+ */
+body.in-electron { background: var(--bg-solid); }
+
+/* macOS 才有毛玻璃，body 让开，露出它 */
+body.on-mac { background: var(--bg-window); }
 
 .shell {
   display: flex;
@@ -33,8 +39,11 @@ body.in-electron { background: var(--bg-window); }
   user-select: none;
 }
 
-/* 浏览器里没有红绿灯，不用留那块位置 */
-body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
+/* 红绿灯在左上角，导航从它之后开始 */
+body.on-mac .titlebar { padding-left: var(--traffic-lights-w); }
+
+/* Windows 的窗口按钮是右上角的一层覆盖层，右边这几个图标要给它让开 */
+body.in-electron:not(.on-mac) .titlebar { padding-right: var(--window-controls-w); }
 
 .titlebar .right {
   margin-left: auto;

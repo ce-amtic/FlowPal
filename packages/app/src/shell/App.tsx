@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import { api, queryKeys } from '../api.ts'
-import { inElectron } from '../bridge.ts'
+import { inElectron, onMac } from '../bridge.ts'
 import { transition } from '../tokens/motion.ts'
 import { TitleBar } from './TitleBar.tsx'
 import { PendingOverlay } from './PendingOverlay.tsx'
@@ -36,8 +36,10 @@ export function App() {
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: api.getSettings })
 
   useEffect(() => {
-    // 浏览器里没有窗口毛玻璃，body 要自己上底色；红绿灯的位置也不用留。
+    // 窗口毛玻璃与红绿灯都是 macOS 独有的。Windows 的窗口按钮在右上角，
+    // 底色也得由 body 自己上——透明的话，露出的是开窗时定死的那一层。
     document.body.classList.toggle('in-electron', inElectron)
+    document.body.classList.toggle('on-mac', inElectron && onMac)
   }, [])
 
   /*
