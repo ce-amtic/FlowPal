@@ -95,9 +95,12 @@ export type AgendaEntry = {
 export type AgendaView = {
   from: string
   to: string
-  days: { day: string; items: AgendaEntry[] }[]
-  /** 重复项不占某一天，界面压成每天顶上的细带 */
-  recurring: AgendaEntry[]
+  days: {
+    day: string
+    items: AgendaEntry[]
+    /** 那天发生的重复项。不占条目位置，界面压成这一天顶上的细带 */
+    recurring: AgendaEntry[]
+  }[]
 }
 
 /**

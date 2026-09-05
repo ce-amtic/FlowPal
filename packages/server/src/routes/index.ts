@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { Calendar, Run } from '@flowpal/shared'
-import { createCtx, nowInShanghai, FragmentSource, RawType, NowChoice, NowOutput, nowJsonSchema } from '@flowpal/shared'
+import { createCtx, nowInShanghai, occursOn, supportsRrule, FragmentSource, RawType, NowChoice, NowOutput, nowJsonSchema } from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
 import { newId } from '../store/db.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
@@ -359,21 +359,46 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     const candidates = listItems(db).filter(
       (i) => (i.type === 'event' || i.type === 'task') && i.status === 'active',
     )
-    const recurring = candidates.filter((i) => i.rrule !== null)
+    /*
+     * 重复项归到它真正发生的那几天，不堆在页顶。
+     *
+     * 页顶一条总的细带在库里只有几条重复项时读得过去，教务同步一接上就不行了：
+     * 一学期十几门课全挤在那一条里，而「今天有没有课、几点」——日程页上最该一眼
+     * 看到的东西——反倒一个字都没有。
+     */
+    /*
+     * `recurrence` 是模型写的自由字符串，随时会出现一条我们放不下的规则。
+     * **放不下不等于不存在**：那种条目退回按 startsAt 当成一条普通的事，落在它
+     * 第一次发生的那天。既不让整页 500，也不让它悄悄从日程上消失。
+     */
+    const placeable = (i: ItemWithSources) =>
+      i.rrule !== null && i.startsAt !== null && supportsRrule(i.rrule)
+    const recurring = candidates.filter(placeable)
     const withDate = candidates
-      .filter((i) => !i.rrule && (i.startsAt ?? i.dueAt))
+      .filter((i) => !placeable(i) && (i.startsAt ?? i.dueAt))
       .map((i) => ({ item: i, day: (i.startsAt ?? i.dueAt)!.slice(0, 10) }))
       .filter((x) => x.day >= from && x.day <= to)
       .sort((a, b) => a.day.localeCompare(b.day)
         || (a.item.startsAt ?? a.item.dueAt ?? '').localeCompare(b.item.startsAt ?? b.item.dueAt ?? ''))
 
-    const days: { day: string; items: unknown[] }[] = []
-    for (const x of withDate) {
-      const last = days.at(-1)
-      if (last && last.day === x.day) last.items.push(withProject(x.item))
-      else days.push({ day: x.day, items: [withProject(x.item)] })
+    const byDay = new Map<string, { items: unknown[]; recurring: unknown[] }>()
+    const bucket = (day: string) => {
+      let b = byDay.get(day)
+      if (!b) { b = { items: [], recurring: [] }; byDay.set(day, b) }
+      return b
     }
-    return c.json({ from, to, days, recurring: recurring.map(withProject) })
+    for (const x of withDate) bucket(x.day).items.push(withProject(x.item))
+    for (const day of daysInRange(from, to)) {
+      for (const item of recurring) {
+        if (occursOn(item.rrule!, item.startsAt!, day)) bucket(day).recurring.push(withProject(item))
+      }
+    }
+
+    // 只有课的那天照样是一天。少了这一步，「今天三节课、没有别的事」在日程上是空的。
+    const days = [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, b]) => ({ day, ...b }))
+    return c.json({ from, to, days })
 
     function withProject(item: ItemWithSources) {
       return {
@@ -602,6 +627,13 @@ function isConnectionError(e: unknown): boolean {
 }
 
 /** 从 ISO 时刻字符串（带 +08:00）往后推 n 天，返回 YYYY-MM-DD。 */
+/** 区间里的每一天，两端都含。 */
+function daysInRange(from: string, to: string): string[] {
+  const days: string[] = []
+  for (let day = from; day <= to; day = daysFrom(`${day}T12:00:00+08:00`, 1)) days.push(day)
+  return days
+}
+
 function daysFrom(iso: string, n: number): string {
   const d = new Date(iso)
   d.setDate(d.getDate() + n)

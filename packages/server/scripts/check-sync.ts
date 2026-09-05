@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { CalendarSchema, createCtx } from '@flowpal/shared'
+import { CalendarSchema, createCtx, occursOn, supportsRrule } from '@flowpal/shared'
 import { openDb } from '../src/store/db.ts'
 import { insertFragment } from '../src/store/fragments.ts'
 import { itemHistory, listItems } from '../src/store/items.ts'
@@ -161,6 +161,52 @@ assert(
   '每条引用逐字出现在拉回来的原文里',
   mapped.flatMap((m) => m.item.citations.filter((c) => !rawText.includes(c.quote)).map((c) => c.quote)).join(' / '),
 )
+
+// ── 重复项落在哪几天 ──────────────────────────────────────────────────
+
+console.log('\n重复')
+
+{
+  // 用上面那条课自己的 RRULE，不另写一条：日程页要问的正是「同步进来的这一条
+  // 在今天发生吗」，拿一条手编的规则去问，验的就是另一件事了。
+  const rule = weekly!.item.recurrence!
+  const start = weekly!.item.starts_at!
+
+  assert(occursOn(rule, start, '2026-09-14'), '每周一的课在第二个周一发生')
+  assert(!occursOn(rule, start, '2026-09-15'), '它不在周二发生')
+  assert(!occursOn(rule, start, '2026-08-31'), 'DTSTART 之前不发生')
+  assert(!occursOn(rule, start, '2026-10-05'), 'UNTIL 之后不发生——课结束了就不该还在日程上')
+  assert(
+    occursOn(rule, start, '2026-09-28'),
+    'UNTIL 当天仍然发生：它是最后一次上课那天，不是结束之后',
+  )
+
+  const biweekly = 'FREQ=WEEKLY;BYDAY=MO;INTERVAL=2;UNTIL=20261228T155959Z'
+  assert(
+    occursOn(biweekly, start, '2026-09-21') && !occursOn(biweekly, start, '2026-09-14'),
+    '隔周的相位由 DTSTART 定，不是随便隔一周',
+  )
+
+  const monthly = 'FREQ=MONTHLY'
+  assert(
+    occursOn(monthly, '2026-09-07T09:00:00+08:00', '2026-11-07')
+    && !occursOn(monthly, '2026-09-07T09:00:00+08:00', '2026-11-08'),
+    '按月重复落在 DTSTART 那个日子上',
+  )
+
+  let loud = false
+  try {
+    occursOn('FREQ=YEARLY', start, '2026-09-14')
+  } catch {
+    loud = true
+  }
+  assert(loud, '看不懂的规则抛出，而不是当成「不发生」把一门课从日程上抹掉')
+  assert(
+    !supportsRrule('FREQ=YEARLY') && !supportsRrule('FREQ=MONTHLY;BYDAY=2TU'),
+    '放不下的规则事先问得出来，日程页据此给它另找位置而不是整页 500',
+  )
+  assert(supportsRrule(rule) && supportsRrule(monthly), '我们自己写出来的规则都放得下')
+}
 
 // ── 通知的信封 ────────────────────────────────────────────────────────
 
