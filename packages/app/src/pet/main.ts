@@ -172,7 +172,10 @@ const renderer = createPetRenderer({
     }
     if (event.type === 'doubleclick') {
       renderer.setNativeWindowDrag(false)
-      void window.flowpal?.pet?.openMain?.('/now')
+      // Double-click restores the existing window, never a route. The pet's
+      // temporary receiving/happy state is not a reliable session indicator;
+      // leave the hash and React history state intact on every return.
+      void window.flowpal?.pet?.openMain?.()
     }
     if (event.type === 'pointercancel') pet?.cancelDrag()
     if (event.type === 'pointercancel') renderer.setNativeWindowDrag(false)

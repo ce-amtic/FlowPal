@@ -252,7 +252,11 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
     // state once the OS confirms the transition.
     hidePet(state.getPet())
     focusWindow(main)
-    await navigateMain(main, state.getMainOptions().app, normalizeMainHash(hash))
+    // No route means "restore this window", not "go to /now". In particular,
+    // normalizing undefined would silently discard a running focus session.
+    if (typeof hash === 'string') {
+      await navigateMain(main, state.getMainOptions().app, normalizeMainHash(hash))
+    }
   }
 
   const onPetOpenMain = async (event: IpcMainInvokeEvent, hash: unknown): Promise<void> => {
@@ -261,7 +265,9 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
     if (!main) return
     hidePet(state.getPet())
     focusWindow(main)
-    await navigateMain(main, state.getMainOptions().app, normalizeMainHash(hash))
+    if (typeof hash === 'string') {
+      await navigateMain(main, state.getMainOptions().app, normalizeMainHash(hash))
+    }
   }
 
   const onOpenRucLogin = (event: IpcMainInvokeEvent): void => {

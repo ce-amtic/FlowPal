@@ -813,3 +813,35 @@ app 使用同一形状。A 的 items/fragments/extract、projects、五页取数
 - 环境限制：当前工作环境没有可执行 Electron binary，且 npm registry DNS 为
   `ENOTFOUND`，所以没有把真实窗口截图、跨屏 DPI、在线 CAS/JWT 和完整 workspace
   `pnpm typecheck` 写成已通过。失败能力均保持显式状态，不用样例数据冒充在线结果。
+
+### 17. 2026-09-06 专注点击、窗口唤回与 mock 投放核对
+
+本节更新当前行为；上面的阶段记录保留为历史，不代表本次运行环境。
+
+- **专注点击**：使用 220ms 的轻微半眨眼，眼睛最多合拢 35%；自动眨眼仍使用
+  原有幅度。普通按下/释放不再切到 `receiving` 或 `happy`，也不设置延迟恢复旧
+  专注表情的计时器，避免专注结束后旧反馈覆盖新状态。保留减弱动态设置。
+- **双击唤回**：桌宠调用无路由的 `openMain()`，不依赖临时桌宠状态判断页面。
+  Electron 的 `openMain` / `petOpenMain` 收到省略的 hash 时只显示、恢复并聚焦
+  已有主窗口，不调用 `navigateMain`。此前 `normalizeMainHash(undefined)` 会
+  默认到 `/now`，这是上一轮只修改 renderer 后仍退出专注的原因。只有显式路由
+  请求（如采集入口）才导航；不重载 `/focus`，保留其 history state 和内存计时。
+- **mock 文件投放（本次只诊断）**：`mockApi.throwIn` 明确拒绝写入，不会生成待办
+  或调用真实模型。preload drop → pet 文件回调 → IPC → DesktopInputController →
+  `throwIn({source:'drop', rawType, rawBlobPath})` 在源码中已接线。实际原生投放
+  送达后应唤起主窗口；完全没有窗口反应不能用 mock 限制解释，仍须原生事件验证。
+- **待修的可见回执**：Controller 丢弃文件异常详情，广播的 `receipt` 没有 UI
+  消费者；Composer 只显示自身提交结果，因此 mock 拒绝原因不可见。另有 App 与
+  Controller 的遗留重复 drop/hotkey 订阅，需要统一为单次采集后再验收真实录入。
+  未把“有接口接线”写成“原生文件采集已验收”，也未为测试打开真实写入。
+- **本次验证**：11 个回归测试通过，覆盖实际 pet 入口与 IPC（Electron API 为
+  mock）、三轮隐藏/最小化后唤回、显式导航仍可用、半眨眼、状态与自动眨眼不回退。
+  前端 TypeScript、前端生产构建和 Electron bundle 通过；Electron 完整类型检查
+  仍被既有 `@flowpal/shared` 缺少 `RucExternalSource` 导出阻塞。本次没有运行真实
+  Finder 投放，也不将 mock API 测试当成模型提取验证。主进程变更需重启 Electron。
+
+回归命令（本机 Node 26；使用 Node 模块 mock 和 TypeScript 支持）：
+
+```bash
+node --experimental-test-module-mocks --test packages/app/tests/pet-focus.test.mjs packages/electron/tests/pet-navigation.test.mjs
+```

@@ -161,7 +161,13 @@ export function PetHost({
 
   // A ref keeps the renderer stable while route-level callbacks change.
   interactionRef.current = (event) => {
-    if (!interactive) return
+    if (!interactive) {
+      // The focus page deliberately disables navigation and drag forwarding,
+      // but the mascot still acknowledges a click. Keep this visual feedback
+      // local so a focus-session double click cannot accidentally route away.
+      if (event.type === 'pointerup' && !event.dragged) renderer.current?.tap()
+      return
+    }
     if (event.type === 'hit') {
       // The inline A-size pet is part of the main layout. Hover prompts are
       // reserved for the detached resident window (pet.html), so the main

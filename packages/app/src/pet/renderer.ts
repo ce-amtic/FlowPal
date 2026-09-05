@@ -202,6 +202,7 @@ export class WebGLPetRenderer implements PetRenderer {
   private actionPreviousStatus: PetStatus | null = null
   private actionPreviousMeta: PetStatusMeta = {}
   private blinkStartedAt = 0
+  private blinkDepth = 0.96
   private lastFrame = 0
   private disposed = false
   private mounted = false
@@ -388,10 +389,21 @@ export class WebGLPetRenderer implements PetRenderer {
   tap(): void {
     if (this.disposed) return
     window.clearTimeout(this.tapTimer)
+    this.tapTimer = 0
     const baseExpression = this.expression
-    // A focused pet stays focused when touched; the press/squash supplies the
-    // feedback without turning the face into a smile.
-    this.setExpression(baseExpression === 'focus' ? 'focus' : 'happy', 0)
+    if (this.state.snapshot.status === 'focus') {
+      // A shallow acknowledgement, not a full eye closure or a temporary
+      // smile. No delayed expression restoration: ending the session during
+      // this blink must not restore a stale focus expression later.
+      this.setExpression('focus')
+      if (!this.reducedMotion) {
+        this.blinkDepth = 0.35
+        this.blinkStartedAt = this.now()
+      }
+      this.wake()
+      return
+    }
+    this.setExpression('happy', 0)
     this.setPoseTarget(0.45)
     window.clearTimeout(this.releaseTimer)
     this.releaseTimer = window.setTimeout(() => {
@@ -899,7 +911,9 @@ export class WebGLPetRenderer implements PetRenderer {
         ? { message: this.state.snapshot.message }
         : {},
     }
-    this.setStatus('receiving')
+    // Touching a focused pet is visual feedback, not a new collection task.
+    // Keep the focus expression and work state through pointerdown/up.
+    if (this.state.snapshot.status !== 'focus') this.setStatus('receiving')
     this.targetSquash = 0.88
     this.pressTimer = window.setTimeout(() => {
       this.pressTimer = 0
@@ -964,7 +978,7 @@ export class WebGLPetRenderer implements PetRenderer {
       this.velocityZ = Math.min(this.velocityZ, 80)
       this.setExpression('happy', 900)
       this.setInteractionStatus('receiving', '轻轻放下')
-    } else {
+    } else if (gesture.previousStatus !== 'focus') {
       this.press(0.45)
     }
     this.restoreGestureStatus(gesture.previousStatus, gesture.previousMeta)
@@ -1071,6 +1085,7 @@ export class WebGLPetRenderer implements PetRenderer {
     this.blinkTimer = window.setTimeout(() => {
       this.blinkTimer = 0
       if (!this.disposed && !document.hidden && !this.gesture && !this.reducedMotion) {
+        this.blinkDepth = 0.96
         this.blinkStartedAt = this.now()
         this.wake()
       }
@@ -1182,7 +1197,7 @@ export class WebGLPetRenderer implements PetRenderer {
   private blinkValue(time: number): number {
     if (!this.blinkStartedAt || this.reducedMotion) return 1
     const progress = clamp((time - this.blinkStartedAt) / 220, 0, 1)
-    return 1 - 0.96 * Math.sin(Math.PI * progress)
+    return 1 - this.blinkDepth * Math.sin(Math.PI * progress)
   }
 
   private draw(blink: number, eyeStyle: EyeStyle, statusColor: readonly [number, number, number]): void {
