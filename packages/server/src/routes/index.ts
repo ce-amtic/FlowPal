@@ -180,7 +180,7 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
           dropped: 0,
           needsConfirm: items.filter((i) => i.status === 'needs_confirm').length,
         }
-        const message = items.length === 0 ? '没找到需要记的东西。原文已存。' : '接住了。原文已存。'
+        const message = items.length === 0 ? '没有需要记录的内容。原文已存。' : '已记下。原文已存。'
         finishRun(db, ctx, run.id, 'done', message, counts)
         emitRunFinished(run.id, getRun(db, run.id) as Run)
       } else {
@@ -193,8 +193,8 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
       }
     } catch (e) {
       const message = isConnectionError(e)
-        ? '连不上模型。原文已存。'
-        : '没能理解这条。原文已存。'
+        ? '无法连接模型。原文已存。'
+        : '未能理解这条。原文已存。'
       finishRun(db, ctx, run.id, 'failed', message, null)
       emitRunFinished(run.id, getRun(db, run.id) as Run)
     }

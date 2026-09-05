@@ -81,7 +81,7 @@ export async function runAgentLoop(
     if (res.toolCalls.length === 0) {
       counts.updated = updatedIds.size
       counts.dropped = droppedIds.size
-      return { status: 'done', message: res.text ?? '接住了。原文已存。', counts }
+      return { status: 'done', message: res.text ?? '已记下。原文已存。', counts }
     }
 
     messages.push({
@@ -111,7 +111,7 @@ export async function runAgentLoop(
 
   counts.updated = updatedIds.size
   counts.dropped = droppedIds.size
-  return { status: 'limit', message: '这条太复杂，没能处理完。原文已存。', counts }
+  return { status: 'limit', message: '这条未能处理完。原文已存。', counts }
 }
 
 /** 相对路径按仓库根解析（promptsDir 恒在仓库根的 prompts/ 下），不按进程 cwd。 */

@@ -256,6 +256,9 @@ for (const name of fixtures) {
   const issues: string[] = []
   console.log(`\n  ${name}  (now=${fixture.now}, status=${result.status})`)
   console.log(`    created=${result.counts.created} updated=${result.counts.updated} needsConfirm=${result.counts.needsConfirm}`)
+  // 回执是这十条里唯一会被用户逐字读到的一句话，却没有任何断言管得着它。
+  // 打出来至少让改提示词的人看见自己改成了什么。
+  console.log(`    回执：${result.message ?? '—'}`)
   console.log(`    条数：期望 ${expect?.count ?? '—'} / 实得 ${items.length}`)
   if (expect?.count !== undefined && expect.count !== items.length) {
     issues.push(`条数：期望 ${expect.count}，实得 ${items.length}`)

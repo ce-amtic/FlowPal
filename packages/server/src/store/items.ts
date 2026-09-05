@@ -136,6 +136,16 @@ export function updateItemFields(
   }
 }
 
+/**
+ * 契约里的字段名与列名不同的那几个。
+ *
+ * 抽取契约叫 `recurrence`，列叫 `rrule`。insertItem 那边是手写的字段表，两个名字
+ * 在那里当面对上了；补丁这条路是拿键名直接拼 SQL 的，所以对应必须显式写出来。
+ * 少了它的症状是模型改一次重复规则就抛「不可改的字段」，而这个异常没人接，
+ * 整次循环变成 failed。
+ */
+const PATCH_COLUMN: Record<string, string> = { recurrence: 'rrule' }
+
 /** agent 循环里的 updateItem。actor 是 llm，fragment_id 指回引发改动的碎片。 */
 export function updateItemForAgent(
   db: DatabaseSync, ctx: Ctx, id: string, patch: Record<string, string | null>,
@@ -143,9 +153,10 @@ export function updateItemForAgent(
 ): void {
   const before = db.prepare(`SELECT * FROM items WHERE id = ?`).get(id) as Record<string, any> | undefined
   if (!before) throw new Error(`条目不存在：${id}`)
-  for (const [field, value] of Object.entries(patch)) {
-    if (field === 'project') continue
-    if (!ALLOWED_PATCH_FIELDS.has(field)) throw new Error(`不可改的字段：${field}`)
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === 'project') continue
+    const field = PATCH_COLUMN[key] ?? key
+    if (!ALLOWED_PATCH_FIELDS.has(field)) throw new Error(`不可改的字段：${key}`)
     if (before[field] === value) continue
     db.prepare(`UPDATE items SET ${field} = ?, updated_at = ? WHERE id = ?`).run(value, ctx.now, id)
     recordItemHistory(db, ctx, id, field, before[field], value as string | null, 'llm', fragmentId)
