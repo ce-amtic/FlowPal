@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { Calendar, Run } from '@flowpal/shared'
-import { createCtx, nowInShanghai, FragmentSource, RawType, NowOutput, nowJsonSchema } from '@flowpal/shared'
+import { createCtx, nowInShanghai, FragmentSource, RawType, NowChoice, NowOutput, nowJsonSchema } from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
 import {
@@ -270,15 +270,36 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
         schemaName: 'now_output',
         jsonSchema: nowJsonSchema(),
       })
-      const parsed = NowOutput.safeParse(raw)
-      if (!parsed.success) {
-        throw new Error(`「此刻」输出不符合契约：${JSON.stringify(parsed.error.issues)}`)
+      /*
+       * 逐项验，不整份验。
+       *
+       * 观测到的失败：模型偶尔在某个 alternate 上漏掉 steps，三次里约一次。整份
+       * 校验是全有或全无，于是「此刻」整页退成空态——首屏因为一个次要候选而空白。
+       * alternates 为空本来就是合法形状，扔掉坏的不破坏契约；为了它扔掉写对了的
+       * primary 才破坏。primary 自己不合契约仍然走空态，那是真没有可推的。
+       *
+       * 送给模型的 json_schema 仍然是完整的 NowOutput，要求没有放松，放松的只是
+       * 收到坏输出时的处置。
+       */
+      const shell = raw as Partial<Record<keyof NowOutput, unknown>>
+      const primary = NowChoice.safeParse(shell.primary)
+      if (!primary.success) {
+        throw new Error(`「此刻」的 primary 不符合契约：${JSON.stringify(primary.error.issues)}`)
       }
+      const candidates = Array.isArray(shell.alternates) ? shell.alternates : []
+      const alternates = candidates
+        .map((a) => NowChoice.safeParse(a))
+        .filter((r) => r.success)
+        .map((r) => r.data)
+      if (alternates.length !== candidates.length) {
+        console.warn(`「此刻」丢弃了 ${candidates.length - alternates.length} 个不合契约的候选`)
+      }
+
       const payload = {
-        primary: parsed.data.primary,
-        alternates: parsed.data.alternates,
-        energy: parsed.data.energy_reading || null,
-        basis: parsed.data.basis,
+        primary: primary.data,
+        alternates,
+        energy: typeof shell.energy_reading === 'string' ? shell.energy_reading || null : null,
+        basis: Array.isArray(shell.basis) ? shell.basis.filter((b) => typeof b === 'string') : [],
       }
       setNowCache(db, ctx, JSON.stringify(payload))
       return c.json(payload)
