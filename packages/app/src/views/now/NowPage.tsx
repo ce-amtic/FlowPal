@@ -63,7 +63,7 @@ export function NowPage() {
         : undefined}
     >
       <header className="now-head">
-        <Pebble size={128} />
+        <Pebble size={104} />
         <div className="now-greeting">
           <p className="greeting">{greeting()}</p>
           {/*
