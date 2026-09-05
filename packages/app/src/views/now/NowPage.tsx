@@ -86,7 +86,7 @@ export function NowPage() {
           </motion.p>
         </AnimatePresence>
 
-        <motion.p layout="position" className="now-reason">{candidate.why}</motion.p>
+        <motion.p layout="position" className="now-reason">{candidate.reason}</motion.p>
 
         <motion.div layout="position" className="now-actions">
           <button className="primary" onClick={() => navigate('/focus')}>开始</button>

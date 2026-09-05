@@ -66,16 +66,9 @@ export type NowPick = {
   itemId: string
   title: string
   /** 为什么是它。必须落在具体的处境上 */
-  why: string
-  /** 第一步；其后是更小的切口。「更小的一步」在这里面往后走 */
+  reason: string
+  /** 第一步；其后是更小的切口。「更小的一步」在这里面往后走。语义层保证至少两级 */
   steps: string[]
-}
-
-/** 这次输出用了哪条材料。逐字，所以每句话都指得出出处 */
-export type NowBasis = {
-  itemId: string | null
-  quote: string
-  field: string | null
 }
 
 export type NowView = {
@@ -83,7 +76,8 @@ export type NowView = {
   alternates: NowPick[]
   /** 模型的一句判断，必须引用一条给它的事实 */
   energy: string | null
-  basis: NowBasis[]
+  /** 这次输出用了哪些材料：条目 id，或逐字事实 */
+  basis: string[]
 }
 
 /** 一次投放：碎片 + 它的回执 + 抽出或更新到的条目。零条与失败都是常态 */
