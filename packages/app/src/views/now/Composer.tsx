@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import { api } from '../../api.ts'
 import { transition } from '../../tokens/motion.ts'
+import { Markup } from '../../shell/Markup.tsx'
 
 type RecordMutation = UseMutationResult<Awaited<ReturnType<typeof api.throwIn>>, Error, Recording>
 
@@ -187,8 +188,11 @@ function Receipt({ record, linkItems }: { record: RecordMutation; linkItems: boo
 
   return (
     <>
-      {/* 四种收场各有各的说法，都由服务端给——同一件事在这里和「最近」上必须同一句 */}
-      {run.message && <p className="receipt-line">{run.message}</p>}
+      {/*
+        四种收场各有各的说法，都由服务端给——同一件事在这里和「最近」上必须同一句。
+        这句话里可以就地标出条目，所以走标记渲染；不带标记的话原样就是一段文字。
+      */}
+      {run.message && <Markup text={run.message} />}
       {items.length > 0 && (
         <ul className="receipt-items">
           {items.map((item) => (

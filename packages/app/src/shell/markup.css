@@ -1,0 +1,44 @@
+/*
+ * 模型的话与它标出来的东西。
+ *
+ * 间距按亲疏：一组紧跟在一段话后面时和它贴着，块与块之间才断开。这和五页上那套
+ * 节奏是同一套，不另立一份。
+ */
+.markup > * + * { margin-top: var(--space-5); }
+
+.markup-text {
+  margin: 0;
+  line-height: var(--leading);
+}
+
+/* 紧跟在话后面的那一组属于这句话，所以贴着它，不按块间距断开 */
+.markup-text + .markup-run { margin-top: var(--space-2); }
+
+.markup-run {
+  margin: 0;
+}
+
+/* 判断从属于事实：它挂在那一行下面，比它淡、比它小 */
+.markup-note {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-3);
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.markup-group > .group-label { margin-bottom: var(--space-2); }
+
+/*
+ * 句子中间提到的那一条。做成一枚贴着文字的小标签，而不是一整行——它在这里是句子的
+ * 一部分，不是一个独立的对象。
+ */
+.markup-ref {
+  border-radius: var(--radius-pill);
+  padding: 1px var(--space-2);
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.markup-ref:hover { background: var(--accent-line); color: var(--bg-solid); }

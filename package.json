@@ -12,7 +12,8 @@
     "check:fixtures": "pnpm --filter @flowpal/server check:fixtures",
     "bench:now": "pnpm --filter @flowpal/server bench:now",
     "check:tokens": "pnpm --filter @flowpal/app check:tokens",
-    "check": "pnpm typecheck && pnpm check:tokens && pnpm check:fixtures",
+    "check:markup": "pnpm --filter @flowpal/shared check:markup",
+    "check": "pnpm typecheck && pnpm check:tokens && pnpm check:markup && pnpm check:fixtures",
     "demo:reset": "pnpm --filter @flowpal/server demo:reset",
     "typecheck": "pnpm -r exec tsc --noEmit"
   },
