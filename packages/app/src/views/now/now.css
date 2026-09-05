@@ -1,24 +1,24 @@
-/*
- * 形象自带接触阴影，画布下缘那一截是阴影，不是身体。所以问候语按整块居中对齐，
- * 顶对齐会让它看起来比形象高出一截。
- */
+/* 形象、问候、精力自上而下三行，左对齐 */
 .now-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: 0 0 var(--space-6);
+  position: relative;
+  margin: 0 0 var(--space-8);
 }
 
-.now-greeting { flex: 1 1 auto; min-width: 0; }
+.now-greeting { margin-top: var(--space-3); }
 
 .greeting {
   margin: 0;
-  font-size: var(--text-lead);
+  font-size: var(--text-title);
+  font-weight: 600;
   line-height: var(--leading-tight);
 }
 
-/* 刷新和左边的形象对称，落在问候那一行的右端 */
-.now-refresh { flex: 0 0 auto; }
+/* 刷新是页级动作，钉在这一块的右上角，不参与三行的竖排 */
+.now-refresh {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
 
 .now-refresh:disabled { cursor: default; }
 
@@ -26,7 +26,7 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* 模型对处境的那一句判断。它有凭据，所以它读得清 */
+/* 模型对处境的那一句判断，问候语的副标题。它有凭据，所以它读得清 */
 .energy {
   margin: var(--space-2) 0 0;
   color: var(--fg-dim);
