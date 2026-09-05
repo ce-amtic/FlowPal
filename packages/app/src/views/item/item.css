@@ -1,0 +1,64 @@
+.item-meta {
+  margin: calc(var(--space-4) * -1) 0 var(--space-4);
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.item-status { color: var(--fg-dim); font-size: var(--text-aux); }
+
+.source {
+  padding: var(--space-4);
+  border-radius: var(--radius-box);
+  background: var(--field);
+}
+
+.source + .source { margin-top: var(--space-3); }
+
+.source-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 标出来的是引文，指的是「这个字段从这句话读出来的」，不是强调 */
+.source-text mark {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: inherit;
+}
+
+.source-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.source-blob {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-box);
+  background: var(--field);
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.history-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-aux);
+  color: var(--fg-dim);
+}
+
+.history-actor { margin-left: auto; }

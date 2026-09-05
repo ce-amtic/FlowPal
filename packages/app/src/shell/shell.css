@@ -189,6 +189,8 @@ body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
 .overlay-scrim {
   position: fixed;
   inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -199,9 +201,8 @@ body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
   width: min(var(--content-max), calc(100% - var(--space-8)));
   padding: var(--space-4);
   border-radius: var(--radius-box);
-  background: var(--card-hover);
+  background: var(--surface);
   box-shadow: var(--card-shadow);
-  backdrop-filter: blur(20px);
 }
 
 .overlay-head {
@@ -227,6 +228,39 @@ body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
 }
 
 .plain-list a:hover { color: var(--accent); }
+
+.confirm-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.confirm-why {
+  margin: var(--space-1) 0 0;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.confirm-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--space-3);
+}
+
+button.quiet {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: var(--text-aux);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+button.quiet:hover { color: var(--fg); }
+button.quiet:disabled { cursor: default; opacity: 0.5; }
 
 .state-error button {
   margin-top: var(--space-2);

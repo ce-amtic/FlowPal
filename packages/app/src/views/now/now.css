@@ -59,19 +59,6 @@ button.primary {
 
 button.primary:hover { opacity: 0.88; }
 
-button.quiet {
-  border: 0;
-  padding: 0;
-  background: none;
-  color: var(--fg-dim);
-  font: inherit;
-  font-size: var(--text-aux);
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease);
-}
-
-button.quiet:hover { color: var(--fg); }
-
 .date-band {
   display: flex;
   flex-wrap: wrap;

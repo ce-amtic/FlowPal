@@ -1,4 +1,6 @@
 import type { Citation, Item, Project, Run } from '@flowpal/shared'
+
+export type { Citation, Item, Project, Run }
 import { mockApi } from './mock/mockApi.ts'
 
 /**
@@ -9,6 +11,23 @@ import { mockApi } from './mock/mockApi.ts'
  * 在不同页里的形状不同（日程按天分组、项目要带「多久没动」、最近要带那次投放的
  * 回执），把分组放在前端等于把同一份逻辑写五遍。
  */
+
+/**
+ * 一条字段变更。改期那几行是处境信号，所以历史要看得见。
+ *
+ * 这一处是下划线命名：服务端把库里的行原样返出来，没有转换。跟着它写，
+ * 不在前端悄悄改名——改名会让人以为两边是同一套命名，然后在别处踩空。
+ */
+export type ItemHistoryRow = {
+  id: string
+  item_id: string
+  changed_at: string
+  field: string
+  old_value: string | null
+  new_value: string | null
+  actor: string
+  fragment_id: string | null
+}
 
 export type ItemWithSources = Item & {
   sourceFragmentIds: string[]
@@ -83,7 +102,8 @@ export type AgendaView = {
 
 export type Api = {
   listItems: () => Promise<{ items: ItemWithSources[] }>
-  getItem: (id: string) => Promise<{ item: ItemWithSources; history: unknown[] }>
+  getItem: (id: string) => Promise<{ item: ItemWithSources; history: ItemHistoryRow[] }>
+  getFragment: (id: string) => Promise<{ fragment: Fragment }>
   patchItem: (id: string, patch: Record<string, string | null>) => Promise<{ item: ItemWithSources }>
   throwIn: (body: {
     source: string
@@ -115,6 +135,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 const realApi: Api = {
   listItems: () => call('/api/items'),
   getItem: (id) => call(`/api/items/${id}`),
+  getFragment: (id) => call(`/api/fragments/${id}`),
   patchItem: (id, patch) => call(`/api/items/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   throwIn: (body) => call('/api/fragments', { method: 'POST', body: JSON.stringify(body) }),
   getNow: () => call('/api/now'),
@@ -141,6 +162,7 @@ export const api: Api = usingMock ? mockApi : realApi
 export const queryKeys = {
   items: ['items'] as const,
   item: (id: string) => ['items', id] as const,
+  fragment: (id: string) => ['fragments', id] as const,
   now: ['now'] as const,
   recent: ['recent'] as const,
   agenda: ['agenda'] as const,

@@ -19,6 +19,12 @@ export const mockApi: Api = {
     return delay({ item, history: [] })
   },
 
+  getFragment: (id) => {
+    const entry = RECENT.find((r) => r.fragment.id === id)
+    if (!entry) return Promise.reject(new Error(`样例数据里没有碎片 ${id}`))
+    return delay({ fragment: entry.fragment })
+  },
+
   patchItem: (id) => {
     const item = ITEMS.find((i) => i.id === id)
     if (!item) return Promise.reject(new Error(`样例数据里没有条目 ${id}`))
