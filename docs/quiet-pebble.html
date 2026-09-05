@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f3f3f0">
+<meta name="description" content="隅：一枚安静的软团。拖动抱起、轻压回弹，探索可以用代码控制的桌宠。">
+<title>隅 · 桌宠交互原型</title>
+<style>
+:root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:#343a3a;background:#f3f3f0;font-synthesis:none;font-size:16px}*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button,a,input{-webkit-tap-highlight-color:transparent}button{cursor:pointer}button:focus-visible,a:focus-visible,canvas:focus-visible{outline:2px solid #657b7c;outline-offset:4px}button:disabled{opacity:.4;cursor:default}header{height:94px;display:flex;align-items:center;justify-content:space-between;padding:0 44px;border-bottom:1px solid #dedfda;gap:20px}.identity{display:flex;align-items:center;gap:19px}.name{font-size:30px;font-weight:500;letter-spacing:.02em}.separator{width:1px;height:25px;background:#cdd0cb}.subtitle{font-size:14px;color:#6a726f}.version{font-size:12px;letter-spacing:.1em;color:#7c8380}.source{font-size:14px;color:#525e5b;text-decoration:none;border:1px solid #d4d8d1;border-radius:30px;padding:11px 17px;background:transparent}.source:hover{background:#e9ece5}.app{display:grid;grid-template-columns:minmax(0,1fr) 302px;min-height:calc(100svh - 94px)}.stage{position:relative;min-height:600px;overflow:hidden;background:#eff0ed}.stage-top{position:absolute;z-index:2;top:30px;left:36px;right:36px;display:flex;align-items:center;justify-content:space-between;pointer-events:none}.stage-label{font-size:13px;letter-spacing:.12em;color:#7a817c}.state{font-size:14px;color:#59645f;display:flex;align-items:center;gap:8px}.state::before{content:"";width:5px;height:5px;border-radius:50%;background:#859188}canvas{width:100%;height:100%;position:absolute;inset:0;touch-action:none;outline-offset:-5px!important}.stage-note{position:absolute;bottom:35px;left:20px;right:20px;text-align:center;pointer-events:none;color:#767e78;font-size:14px;line-height:1.9}.stage-note small{display:block;font-size:12px;color:#8a918b;letter-spacing:.03em}.reset{position:absolute;right:28px;bottom:30px;background:transparent;border:0;color:#68746c;font-size:14px;padding:8px}.controls{padding:34px 27px 25px;border-left:1px solid #dedfda;background:#fafaf7}.intro{margin:0 0 31px}.intro h1{font-size:22px;line-height:1.5;letter-spacing:.04em;font-weight:500;margin:0 0 9px}.intro p{font-size:14px;color:#7b827d;line-height:1.9;margin:0}.group{border-top:1px solid #e2e5de;padding-top:22px;margin-top:23px}.group h2{font-size:13px;font-weight:500;color:#747d76;letter-spacing:.09em;margin:0 0 14px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.action{border:1px solid #dce0d7;background:#fafaf7;min-height:42px;border-radius:7px;font-size:14px;color:#4a564c;transition:background .18s,border-color .18s}.action:hover{background:#eef1e9;border-color:#bec8b9}.action[aria-pressed=true]{background:#e6ebe1;border-color:#aebcaa}.options{display:flex;gap:8px}.size{flex:1;background:transparent;border:1px solid #dce0d7;color:#5c685e;padding:9px 0;border-radius:7px;font-size:14px}.size[aria-pressed=true]{background:#e6ebe1;border-color:#b5c0ae}.swatches{display:flex;gap:14px}.swatch{width:34px;height:34px;border:4px solid #fafaf7;outline:1px solid transparent;border-radius:50%;background:var(--swatch)}.swatch[aria-pressed=true]{outline-color:#879380}.row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-size:14px;color:#69756a}.row output{font-size:12px;color:#869081;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#7e8d79;height:19px;cursor:pointer}.range-ends{display:flex;justify-content:space-between;font-size:12px;color:#879180;margin-top:5px}details{margin-top:28px;border-top:1px solid #e2e5de;padding-top:20px}summary{font-size:14px;color:#5f6d5e;cursor:pointer}pre{font-size:12px;line-height:1.85;overflow:auto;background:#eef1e9;color:#536350;padding:12px;border-radius:5px;margin-bottom:8px}details p{font-size:12px;line-height:1.8;color:#7e8779}.error{position:absolute;inset:25%;background:#fafaf7;padding:24px;border:1px solid #d4d8d1;z-index:5;line-height:1.8}.error[hidden]{display:none}@media(max-width:800px){header{height:78px;padding:0 22px}.version{display:none}.app{grid-template-columns:1fr}.stage{height:58svh;min-height:350px}.controls{border-left:0;border-top:1px solid #dedfda;padding:26px 24px;display:grid;grid-template-columns:1fr 1fr;gap:20px}.intro{margin:0;grid-column:1/-1}.intro h1{font-size:20px;display:inline;margin-right:14px}.intro p{display:inline}.group{margin:0;padding-top:17px}.group.motion{grid-column:1/-1}.actions{grid-template-columns:repeat(4,1fr)}details{margin:0;grid-column:1/-1}.stage-top{left:24px;right:24px;top:23px}.reset{bottom:70px;right:14px}.stage-note{bottom:22px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto;transition:none!important}}
+.expressions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.expressions .action{min-height:38px}.stage{position:sticky;top:0;height:calc(100svh - 94px)}@media(max-width:800px){.stage{position:relative;height:58svh}.group.expression-group{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<header><div class="identity"><span class="name">隅</span><span class="separator"></span><span class="subtitle">桌宠交互原型</span></div><span class="version">FORM STUDY / 03</span><button class="source" id="download">下载源码</button></header>
+<main class="app">
+<section class="stage" aria-label="桌宠活动区域">
+<div class="stage-top"><span class="stage-label">一枚安静的软团</span><span class="state" id="state" role="status">待在这里</span></div>
+<canvas id="pet" tabindex="0" aria-label="软团。拖动抱起，长按轻压；键盘左右键移动，空格轻弹，P 轻压。">请使用支持 Canvas 的浏览器。</canvas>
+<div class="error" id="error" hidden="">当前浏览器暂时无法启动 3D 画面。请开启硬件加速，或用 Chrome / Safari 打开此页面。</div>
+<div class="stage-note">拖动抱起 · 点一下轻碰 · 长按轻压<small>松手，它会稳稳落下。</small></div>
+<button class="reset" id="reset">回到原位 ↺</button>
+</section>
+<aside class="controls" aria-label="形象与动作设置">
+<div class="intro"><h1>有一点小情绪。</h1><p>圆润的软胶身体，眼睛会回应你。</p></div>
+<section class="group motion"><h2>和它待一会儿</h2><div class="actions"><button class="action" data-action="press">轻压</button><button class="action" data-action="hop">轻弹</button><button class="action" data-action="turn">转个身</button><button class="action" data-action="focus" aria-pressed="false">专注</button></div></section>
+<section class="group expression-group"><h2>今天的表情</h2><div class="expressions"><button class="action" data-expression="calm" aria-pressed="true">平静</button><button class="action" data-expression="happy" aria-pressed="false">开心</button><button class="action" data-expression="sleepy" aria-pressed="false">困倦</button><button class="action" data-expression="curious" aria-pressed="false">疑惑</button><button class="action" data-expression="surprised" aria-pressed="false">惊讶</button><button class="action" data-expression="focus" aria-pressed="false">专注</button></div></section>
+<section class="group"><h2>身体颜色</h2><div class="swatches"><button class="swatch" style="--swatch:#c6c5be" data-color="chalk" aria-label="暖瓷灰" title="暖瓷灰" aria-pressed="true"></button><button class="swatch" style="--swatch:#aebabb" data-color="fog" aria-label="雾蓝灰" title="雾蓝灰" aria-pressed="false"></button><button class="swatch" style="--swatch:#858b83" data-color="stone" aria-label="石苔灰" title="石苔灰" aria-pressed="false"></button></div></section>
+<section class="group"><h2>显示尺寸</h2><div class="options"><button class="size" data-size="96" aria-pressed="false">桌面 96</button><button class="size" data-size="224" aria-pressed="true">放大 224</button></div></section>
+<section class="group"><label class="row" for="softness">柔软程度<output id="softValue">65%</output></label><input id="softness" type="range" min="0" max="100" value="65"><div class="range-ends"><span>扎实</span><span>柔软</span></div></section>
+<section class="group"><label class="row" for="angle">看看侧面<output id="angleValue">0°</output></label><input id="angle" type="range" min="-180" max="180" value="0"><div class="range-ends"><span>−180°</span><span>180°</span></div></section>
+<details><summary>代码怎么控制它</summary><pre>pet.press(0.65)
+pet.hop()
+pet.turn(Math.PI / 4)
+pet.setExpression('happy')
+pet.focus(true)
+pet.setColor('fog')
+pet.setSize(96)</pre><p>原生 WebGL 实时绘制 · 弹簧形变<br>单个 HTML 文件，离线也能运行。</p></details>
+</aside>
+</main>
+<script id="vertex" type="x-shader/x-vertex">
+attribute vec2 position;
+void main(){gl_Position=vec4(position,0.0,1.0);}
+</script>
+<script id="fragment" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 resolution;
+uniform vec2 center;
+uniform vec2 ground;
+uniform float unit;
+uniform float squash;
+uniform float lean;
+uniform float yaw;
+uniform float blink;
+uniform vec2 gaze;
+uniform vec3 bodyColor;
+uniform float elevation;
+uniform vec4 eyeStyle;
+vec3 localPoint(vec3 p){
+ p.y/=squash;
+ p.x*=sqrt(squash);
+ p.x-=lean*(p.y+0.81)*0.3;
+ float c=cos(yaw),s=sin(yaw);
+ return vec3(c*p.x-s*p.z,p.y,s*p.x+c*p.z);
+}
+float shape(vec3 p){
+ p=localPoint(p);
+ // Smooth superellipsoid: continuous curvature and softly flattened contact area.
+ vec3 q=abs(p/vec3(1.115,0.855,0.79));
+ float rounded=(pow(pow(q.x,2.35)+pow(q.y,2.35)+pow(q.z,2.35),1.0/2.35)-1.0)*0.72;
+ float floorCut=-p.y-0.81;
+ float h=max(0.045-abs(rounded-floorCut),0.0)/0.045;
+ return (max(rounded,floorCut)+h*h*0.01125)*min(squash,0.8);
+}
+vec3 normalAt(vec3 p){vec2 e=vec2(0.001,0.0);return normalize(vec3(shape(p+e.xyy)-shape(p-e.xyy),shape(p+e.yxy)-shape(p-e.yxy),shape(p+e.yyx)-shape(p-e.yyx)));}
+float eye(vec2 p,float side){
+ float tilt=eyeStyle.w*side;
+ p=mat2(cos(tilt),-sin(tilt),sin(tilt),cos(tilt))*p;
+ float opening=max(0.07,(eyeStyle.x+side*eyeStyle.z)*blink);
+ vec2 capsule=p;capsule.y/=opening;
+ vec2 q=abs(capsule)-vec2(0.0,0.044);
+ float oval=(length(max(q,0.0))+min(max(q.x,q.y),0.0)-0.065)*min(opening,1.0);
+ // Curved closed eyes retain their stroke weight during the smile transition.
+ vec2 cp=vec2(p.x,p.y-(0.052-5.2*p.x*p.x)*blink);
+ float arc=length(vec2(max(abs(cp.x)-0.076,0.0),cp.y))-0.025;
+ return mix(oval,arc,eyeStyle.y);
+}
+void main(){
+ vec2 pixel=vec2(gl_FragCoord.x,resolution.y-gl_FragCoord.y);
+ vec3 bg=vec3(0.93725,0.94118,0.92941);
+ vec2 sp=(pixel-ground)/unit;
+ float spread=1.0+elevation*0.2;
+ float shadow=exp(-pow(sp.x/(0.82*spread),2.0)-pow(sp.y/(0.13*spread),2.0));
+ float contact=exp(-pow(sp.x/0.58,4.0)-pow(sp.y/0.028,2.0))*exp(-elevation*5.0);
+ bg*=1.0-shadow*(0.20/(1.0+elevation*0.8))-contact*0.14;
+ vec2 uv=(pixel-center)/unit;uv.y=-uv.y;
+ vec3 ro=vec3(uv.x,uv.y+0.33,4.5),rd=normalize(vec3(0.0,-0.073,-1.0));
+ float t=0.0;bool hit=false;
+ for(int i=0;i<64;i++){vec3 p=ro+rd*t;float d=shape(p);if(d<0.0015){hit=true;break;}t+=d;if(t>8.0)break;}
+ if(hit){
+ vec3 p=ro+rd*t,n=normalAt(p),q=localPoint(p);
+ vec3 light=normalize(vec3(-0.65,1.1,1.35));
+ float diffuse=max(dot(n,light),0.0);
+ float fill=max(dot(n,normalize(vec3(0.8,0.2,-0.6))),0.0);
+ vec3 linearBase=pow(bodyColor,vec3(2.2));
+ // Broad area-light response, warm diffuse scattering and grounded underside.
+ vec3 illumination=vec3(0.43,0.46,0.49)+vec3(0.64,0.615,0.57)*diffuse+vec3(0.1,0.12,0.13)*fill;
+ float under=mix(0.68,1.0,smoothstep(-0.81,-0.26,q.y));
+ vec3 halfway=normalize(light-rd);
+ float broadSpec=pow(max(dot(n,halfway),0.0),14.0)*0.038;
+ float softRim=pow(1.0-max(dot(n,-rd),0.0),3.0)*0.038;
+ vec3 linearCol=linearBase*illumination*under+vec3(broadSpec+softRim);
+ vec3 col=pow(max(linearCol,vec3(0.0)),vec3(1.0/2.2));
+ vec2 g=gaze;
+ float eyes=min(eye(q.xy-vec2(-0.235+g.x,0.035+g.y),-1.0),eye(q.xy-vec2(0.235+g.x,0.035+g.y),1.0));
+ float aa=max(0.002,0.65/unit);
+ float mask=(1.0-smoothstep(-aa,aa,eyes))*smoothstep(0.43,0.60,q.z);
+ vec3 eyeColor=vec3(0.18,0.205,0.20)+vec3(0.033)*diffuse;
+ col=mix(col,eyeColor,mask);
+ gl_FragColor=vec4(col,1.0);
+ }else{gl_FragColor=vec4(bg,1.0);}
+}
+</script>
+<script>
+/* Quiet Pebble — no libraries, textures, model files, or network dependencies.
+   Public animation API: window.pet. Units: logical CSS pixels, radians, seconds. */
+(()=>{
+'use strict';
+const canvas=document.getElementById('pet'),stage=canvas.parentElement,status=document.getElementById('state');
+const gl=canvas.getContext('webgl',{alpha:false,antialias:true,powerPreference:'low-power'});
+if(!gl){document.getElementById('error').hidden=false;return;}
+function shader(type,id){const s=gl.createShader(type);gl.shaderSource(s,document.getElementById(id).textContent);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;}
+let program;
+try{program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,'vertex'));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,'fragment'));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));gl.useProgram(program);}catch(e){console.error(e);document.getElementById('error').hidden=false;return;}
+const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);const loc=gl.getAttribLocation(program,'position');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+const U={};['resolution','center','ground','unit','squash','lean','yaw','blink','gaze','bodyColor','elevation','eyeStyle'].forEach(n=>U[n]=gl.getUniformLocation(program,n));
+const palette={chalk:[.83,.823,.792],fog:[.72,.768,.777],stone:[.60,.635,.595]};
+const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+let W=0,H=0,DPR=1,groundY=0,unit=98,size=224,soft=.65,color='chalk',focused=false,raf=0,last=0,blinkAt=0;
+let x=0,tx=0,vx=0,z=0,tz=0,vz=0,sy=1,tsy=1,vsy=0,lean=0,tlean=0,vl=0,angle=0,targetAngle=0,va=0,gx=0,gy=0,tgx=0,tgy=0;
+const moods={calm:[1,0,0,0],happy:[0.7,1,0,0],sleepy:[0.24,0,0,0],curious:[0.90,0,0.32,0.1],surprised:[1.3,0,0,0],focus:[0.64,0,0,-0.12]};
+const moodLabels={calm:"待在这里",happy:"有一点开心",sleepy:"有一点困了",curious:"让我想想",surprised:"诶？",focus:"安静地专注"};
+let mood="calm",transient=null,expressionTimer=0,eyes=[1,0,0,0];
+let pointer=null,pressTimer=0,releaseTimer=0,actionTimer=0,lastStatus='';
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function state(s){if(lastStatus!==s){status.textContent=s;lastStatus=s;}}
+function wake(){if(!raf&&!document.hidden){last=performance.now();raf=requestAnimationFrame(frame);}}
+function resize(){const b=stage.getBoundingClientRect();const oldW=W;W=b.width;H=b.height;DPR=Math.min(devicePixelRatio||1,1.5);canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);groundY=H*.70;unit=Math.min(size,W*.65)/2.27;x=oldW?x/oldW*W:W*.5;tx=x;gl.viewport(0,0,canvas.width,canvas.height);wake();}
+new ResizeObserver(resize).observe(stage);
+function setPoseTarget(amount){tsy=clamp(1-amount*(.14+.24*soft),.60,1.3);wake();}
+function stopPress(){clearTimeout(pressTimer);clearTimeout(releaseTimer);tsy=1;wake();}
+function press(amount=.65){clearTimeout(actionTimer);clearTimeout(releaseTimer);setExpression('happy',950);state('轻轻压一下');setPoseTarget(clamp(Number(amount)||0,0,1));releaseTimer=setTimeout(()=>{tsy=1;wake();},reduced.matches?120:480);}
+function hop(){stopPress();if(pointer)return;setExpression('happy',1000);z=1;vz=reduced.matches?100:210;state('轻轻弹一下');wake();}
+function turn(a){if(!Number.isFinite(a))return;targetAngle=a;state('慢慢转过来');document.getElementById('angle').value=String(Math.round(Math.atan2(Math.sin(a),Math.cos(a))*180/Math.PI));document.getElementById('angleValue').value=Math.round(Math.atan2(Math.sin(a),Math.cos(a))*180/Math.PI)+'°';wake();}
+function setExpression(name,duration=0){
+ if(!moods[name])return;
+ clearTimeout(expressionTimer);
+ if(duration>0){transient=name;expressionTimer=setTimeout(()=>{transient=null;wake();},duration);}
+ else{mood=name;transient=null;focused=name==='focus';document.querySelector('[data-action="focus"]').setAttribute('aria-pressed',String(focused));document.querySelectorAll('[data-expression]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.expression===name)));}
+ tgx=0;tgy=0;state(moodLabels[name]);wake();
+}
+function focus(value=true){setExpression(value?'focus':'calm');}
+function setColor(value){if(!palette[value])return;color=value;document.querySelectorAll('[data-color]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===value)));wake();}
+function setSize(value){size=clamp(Number(value)||224,64,300);unit=Math.min(size,W*.65)/2.27;document.querySelectorAll('[data-size]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.size===size)));tx=clamp(tx,unit*1.25,W-unit*1.25);wake();}
+function reset(){if(pointer){try{canvas.releasePointerCapture(pointer.id);}catch{}pointer=null;}clearTimeout(actionTimer);stopPress();tx=W*.5;tz=0;focused=false;focus(false);turn(0);state('回到原位');wake();}
+window.pet=Object.freeze({press,hop,turn,focus,setExpression,setColor,setSize,reset});
+function spring(p,v,target,k,d,dt){v+=((target-p)*k-v*d)*dt;return[p+v*dt,v];}
+function frame(time){raf=0;const dt=Math.min((time-last)/1000,.025);last=time;
+ [x,vx]=spring(x,vx,tx,170,22,dt);
+ if(pointer?.drag){[z,vz]=spring(z,vz,tz,180,24,dt);tsy=1+soft*.08;tlean=clamp(-vx/550,-.35,.35);}
+ else{tlean=(transient||mood)==='curious'?0.17:0;if(z>0||vz>0){vz-=900*dt;z+=vz*dt;if(z<=0){const impact=Math.abs(vz);z=0;vz=0;vsy-=Math.min(impact/160,3.4)*(.3+soft*.7);state('稳稳落下');}}}
+ [sy,vsy]=spring(sy,vsy,tsy,170-soft*70,reduced.matches?30:16-soft*5,dt);sy=clamp(sy,.55,1.35);
+ [lean,vl]=spring(lean,vl,tlean,130,17,dt);
+ [angle,va]=spring(angle,va,targetAngle,60,16,dt);
+ gx+=(tgx-gx)*Math.min(1,dt*6);gy+=(tgy-gy)*Math.min(1,dt*6);
+ const eyeTarget=moods[transient||mood];for(let i=0;i<4;i++)eyes[i]+=(eyeTarget[i]-eyes[i])*Math.min(1,dt*11);
+ let blink=1;if(blinkAt){const bt=(time-blinkAt)/1000;if(bt<.22)blink=1-.96*Math.sin(Math.PI*clamp(bt/.22,0,1));else blinkAt=0;}
+ const centerY=groundY-z-.81*unit*sy;
+ gl.disable(gl.SCISSOR_TEST);gl.clearColor(.93725,.94118,.92941,1);gl.clear(gl.COLOR_BUFFER_BIT);
+ // Shade only a small region around the body and its contact shadow.
+ const left=Math.max(0,Math.floor((x-unit*2.3)*DPR)),right=Math.min(canvas.width,Math.ceil((x+unit*2.3)*DPR));
+ const top=Math.max(0,Math.floor((centerY-unit*1.8)*DPR)),bottom=Math.min(canvas.height,Math.ceil((groundY+unit*.55)*DPR));
+ gl.enable(gl.SCISSOR_TEST);gl.scissor(left,canvas.height-bottom,Math.max(0,right-left),Math.max(0,bottom-top));
+ gl.uniform2f(U.resolution,canvas.width,canvas.height);gl.uniform2f(U.center,x*DPR,centerY*DPR);gl.uniform2f(U.ground,x*DPR,groundY*DPR);gl.uniform1f(U.unit,unit*DPR);gl.uniform1f(U.squash,sy);gl.uniform1f(U.lean,lean);gl.uniform1f(U.yaw,angle);gl.uniform1f(U.blink,blink);gl.uniform4fv(U.eyeStyle,eyes);gl.uniform2f(U.gaze,gx,gy);gl.uniform3fv(U.bodyColor,palette[color]);gl.uniform1f(U.elevation,z/unit);gl.drawArrays(gl.TRIANGLES,0,6);
+ const moving=Math.abs(x-tx)>.03||Math.abs(vx)>.05||z>.02||Math.abs(vz)>.05||Math.abs(sy-tsy)>.0003||Math.abs(vsy)>.001||Math.abs(lean-tlean)>.0005||Math.abs(vl)>.001||Math.abs(angle-targetAngle)>.001||Math.abs(va)>.001||Math.abs(gx-tgx)+Math.abs(gy-tgy)>.0002||eyes.some((e,i)=>Math.abs(e-eyeTarget[i])>.0005)||blinkAt||pointer;
+ if(moving)raf=requestAnimationFrame(frame);else if(tsy===1)state(moodLabels[transient||mood]);
+}
+function point(e){const r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
+function hit(p){const cy=groundY-z-unit*.81*sy;return Math.pow((p.x-x)/(unit*1.18/Math.sqrt(sy)),4)+Math.pow((p.y-cy)/(unit*.83*sy),4)<1;}
+canvas.addEventListener('pointerdown',e=>{if(pointer||!hit(point(e)))return;e.preventDefault();canvas.focus({preventScroll:true});const p=point(e);pointer={id:e.pointerId,start:p,dx:p.x-x,dy:p.y-(groundY-z-unit*.81*sy),drag:false};canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';pressTimer=setTimeout(()=>{if(pointer&&!pointer.drag){setExpression('happy',1200);state('轻轻抱住');setPoseTarget(.75);}},220);wake();});
+canvas.addEventListener('pointermove',e=>{const p=point(e);if(pointer&&pointer.id===e.pointerId){if(Math.hypot(p.x-pointer.start.x,p.y-pointer.start.y)>6){if(!pointer.drag){stopPress();pointer.drag=true;setExpression('surprised',1100);}state('抱起来了');tx=clamp(p.x-pointer.dx,unit*1.25,W-unit*1.25);tz=clamp(groundY-(p.y-pointer.dy)-unit*.81,0,Math.max(0,groundY-unit*1.85));wake();}}else{canvas.style.cursor=hit(p)?'grab':'default';if(!focused&&Math.abs(p.x-x)<unit*2.8&&Math.abs(p.y-(groundY-z-unit*.81))<unit*2.2){tgx=clamp((p.x-x)/W*.13,-.045,.045);tgy=clamp((groundY-unit*.81-p.y)/H*.08,-.028,.028);wake();}}});
+function up(e){if(!pointer||pointer.id!==e.pointerId)return;const dragged=pointer.drag;pointer=null;stopPress();canvas.style.cursor='grab';if(!dragged)press(.45);else{setExpression('happy',900);vz=Math.min(vz,80);state('轻轻放下');}wake();}
+canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);canvas.addEventListener('lostpointercapture',e=>{if(pointer?.id===e.pointerId)up(e);});canvas.addEventListener('pointerleave',()=>{if(!pointer){tgx=0;tgy=0;wake();}});
+canvas.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight',' ','p','P','Escape'].includes(e.key)){e.preventDefault();if(e.key==='ArrowLeft')tx=clamp(tx-30,unit*1.25,W-unit*1.25);else if(e.key==='ArrowRight')tx=clamp(tx+30,unit*1.25,W-unit*1.25);else if(e.key===' ')hop();else if(e.key.toLowerCase()==='p')press();else reset();wake();}});
+document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;if(a==='press')press();if(a==='hop')hop();if(a==='turn')turn(targetAngle+Math.PI*2);if(a==='focus')focus(!focused);}));
+document.querySelectorAll('[data-expression]').forEach(b=>b.addEventListener('click',()=>setExpression(b.dataset.expression)));
+document.querySelectorAll('[data-color]').forEach(b=>b.addEventListener('click',()=>setColor(b.dataset.color)));
+document.querySelectorAll('[data-size]').forEach(b=>b.addEventListener('click',()=>setSize(+b.dataset.size)));
+document.getElementById('softness').addEventListener('input',e=>{soft=+e.target.value/100;document.getElementById('softValue').value=e.target.value+'%';});
+document.getElementById('angle').addEventListener('input',e=>turn(+e.target.value*Math.PI/180));document.getElementById('reset').addEventListener('click',reset);
+function scheduleBlink(){setTimeout(()=>{if(!document.hidden&&!pointer&&!reduced.matches){blinkAt=performance.now();wake();}scheduleBlink();},focused?9000:4800+Math.random()*4400);}scheduleBlink();
+document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelAnimationFrame(raf);raf=0;if(pointer){pointer=null;tsy=1;}}else wake();});
+canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();cancelAnimationFrame(raf);raf=0;document.getElementById('error').hidden=false;});
+canvas.addEventListener('webglcontextrestored',()=>location.reload());
+})();
+// Save the original, self-contained source, even after controls have been changed.
+const sourceSnapshot='<!doctype html>\n'+document.documentElement.outerHTML;
+document.getElementById('download').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([sourceSnapshot],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='quiet-pebble.html';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+</script></body></html>
