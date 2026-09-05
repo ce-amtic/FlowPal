@@ -42,6 +42,11 @@ export function FocusPage() {
     <div className="focus">
       <Pebble size={112} mood={phase.name === 'running' ? 'focus' : 'calm'} />
 
+      {/*
+        这一段是关于那件事的，不是关于那一步的。那一步的职责是把开始的门槛降下来，
+        按下「开始」的那一刻它已经尽职了——所以它在这里退成一行小字，事情的名字
+        接管主体。「已完成」问的也就名正言顺地是那件事。
+      */}
       <p className="focus-title">{target.title}</p>
       {phase.name !== 'ending' && <p className="focus-step">{target.step}</p>}
 

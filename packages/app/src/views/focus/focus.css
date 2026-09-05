@@ -18,17 +18,20 @@
 /* 拖动区里的可点元素必须显式退出，否则点不动 */
 .focus button, .focus a, .focus textarea { -webkit-app-region: no-drag; }
 
-/* 名字和这一步是同一句话的两行，所以贴着；和「此刻」卡片上是同一个关系 */
+/*
+ * 事情的名字是这一屏的主体——这一段属于它。那一步跟在下面一行，是进门的方式，
+ * 不是这一段的内容。「此刻」上两者的大小是反过来的，因为在那一页门还没进。
+ */
 .focus-title {
-  margin: var(--space-5) 0 var(--space-2);
-  color: var(--fg-dim);
-  font-size: var(--text-aux);
+  margin: var(--space-5) 0 var(--space-1);
+  font-size: var(--text-display);
+  font-weight: 500;
+  line-height: var(--leading-tight);
 }
 
 .focus-step {
   margin: 0;
-  font-size: var(--text-display);
-  font-weight: 500;
+  color: var(--fg-dim);
   line-height: var(--leading-tight);
 }
 
