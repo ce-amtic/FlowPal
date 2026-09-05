@@ -76,8 +76,19 @@ let specific = 0
 let stepsTotal = 0
 const violations = new Map<string, string[]>()
 
+let unreachable = 0
+
 for (let i = 1; i <= runs; i += 1) {
-  const { seconds, now } = await once()
+  // server 重启、掉线这类连不上，不该让整轮对照白跑——记一笔继续
+  let result: Awaited<ReturnType<typeof once>>
+  try {
+    result = await once()
+  } catch (e) {
+    unreachable += 1
+    console.log(`${i}. 连不上 server：${e instanceof Error ? e.message : String(e)}`)
+    continue
+  }
+  const { seconds, now } = result
   times.push(seconds)
 
   if (!now.primary) {
@@ -105,12 +116,19 @@ for (let i = 1; i <= runs; i += 1) {
   console.log(`   一步：${p.steps.join(' → ')}`)
 }
 
+if (times.length === 0) {
+  console.log(`\n${runs} 次全都连不上 ${base}。先起 pnpm dev:server。`)
+  process.exit(1)
+}
+
 const mean = times.reduce((a, b) => a + b, 0) / times.length
 const sorted = [...times].sort((a, b) => a - b)
+const done = runs - unreachable
 
-console.log(`\n${runs} 次：平均 ${mean.toFixed(1)}s，最快 ${sorted[0]!.toFixed(1)}s，最慢 ${sorted.at(-1)!.toFixed(1)}s`)
-console.log(`空态 ${empty}/${runs}`)
-console.log(`梯子由大到小 ${ladderRight}/${runs - empty}`)
+console.log(`\n${done}/${runs} 次跑通：平均 ${mean.toFixed(1)}s，最快 ${sorted[0]!.toFixed(1)}s，最慢 ${sorted.at(-1)!.toFixed(1)}s`)
+if (unreachable > 0) console.log(`连不上 ${unreachable} 次（不计入下面几项）`)
+console.log(`空态 ${empty}/${done}`)
+console.log(`梯子由大到小 ${ladderRight}/${done - empty}`)
 console.log(`一步里提到了这件事本身 ${specific}/${stepsTotal}`)
 
 if (violations.size === 0) {
