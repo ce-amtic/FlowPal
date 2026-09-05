@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
+import { FolderOpen } from 'lucide-react'
 import { api, queryKeys } from '../../api.ts'
+import { ICON } from '../../tokens/icons.ts'
 import { transition } from '../../tokens/motion.ts'
+import { ItemRow } from '../../shell/ItemRow.tsx'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
 import { formatDay } from '../../lib/format.ts'
 import './projects.css'
@@ -37,7 +40,13 @@ export function ProjectsPage() {
         {cards.map((card) => (
           <motion.li layout key={card.project.id} transition={transition.base}>
             <Link to={`/projects/${card.project.id}`} className="project-row">
+              {/*
+                项目不是条目，套不进那一行的数据形状，但要长成同一套东西：同样的
+                左端图标锚点、同样的悬停浅底、行尾同一个位置。图标是项目那一类，
+                所以它和条目的五个图标不重样。
+              */}
               <div className="project-head">
+                <FolderOpen className="row-icon" size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />
                 <span className="project-name">{card.project.name}</span>
                 <span className="idle">{idleLabel(card.idleDays)}</span>
               </div>
@@ -69,13 +78,7 @@ export function ProjectsPage() {
         <section className="group unclassified">
           <h2 className="group-label">未归类</h2>
           <ul className="plain-list">
-            {unclassified.map((item) => (
-              <li key={item.id}>
-                <Link className="row" to={`/items/${item.id}`}>
-                  <span className="row-title">{item.title}</span>
-                </Link>
-              </li>
-            ))}
+            {unclassified.map((item) => <ItemRow key={item.id} item={item} />)}
           </ul>
         </section>
       )}

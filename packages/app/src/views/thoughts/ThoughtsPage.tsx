@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { api, queryKeys, type ItemWithSources } from '../../api.ts'
 import { DayLabel } from '../../shell/DayLabel.tsx'
+import { ItemRow } from '../../shell/ItemRow.tsx'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
 import { formatTime } from '../../lib/format.ts'
-import './thoughts.css'
 
 /**
  * 想法——倒序的流。
@@ -31,13 +30,13 @@ export function ThoughtsPage() {
         <section key={day} className="day">
           <DayLabel day={day} />
           <ul className="plain-list">
+            {/*
+              和全 App 其余的行同一个形状：左端的图标锚点，标题，行尾的时刻。
+              时刻原来在左边自成一列，现在挪到行尾——想法没有日期，行尾空着，
+              而左边那一列时刻会把标题挤到日期骨架的右边，和别处对不齐。
+            */}
             {thoughts.map((t) => (
-              <li key={t.id}>
-                <Link className="row thought" to={`/items/${t.id}`}>
-                  <span className="stamp">{formatTime(t.createdAt)}</span>
-                  <span className="row-title">{t.title}</span>
-                </Link>
-              </li>
+              <ItemRow key={t.id} item={t} meta={formatTime(t.createdAt)} />
             ))}
           </ul>
         </section>

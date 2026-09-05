@@ -108,8 +108,6 @@
 
 .dial-range:active { transform: scaleY(1.08); }
 
-.dial-range:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
-
 .dial-range::-webkit-slider-runnable-track {
   height: var(--dial-h);
   border-radius: var(--radius-pill);

@@ -95,6 +95,7 @@ export function NowPage() {
             size={ICON.size}
             strokeWidth={ICON.stroke}
             className={refresh.isPending ? 'spinning' : undefined}
+            aria-hidden
           />
         </button>
       </header>

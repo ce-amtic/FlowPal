@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
+import { Check, Unplug } from 'lucide-react'
 import { api, queryKeys } from '../../api.ts'
+import { ICON } from '../../tokens/icons.ts'
 import { transition } from '../../tokens/motion.ts'
 import { Markup } from '../../shell/Markup.tsx'
-import { ErrorState } from '../../shell/State.tsx'
-import { useRunStream } from './useRunStream.ts'
+import { Orbs } from '../../shell/Orbs.tsx'
+import { type RunStep, stepText, useRunStream } from './useRunStream.ts'
 import './conversation.css'
 
 /** 一次来回。答案不存库——库里是真相，这里只是刚才说过的话 */
@@ -36,33 +38,54 @@ function TurnBlock({ turn }: { turn: Turn }) {
   const { data } = useQuery({ queryKey: queryKeys.items, queryFn: api.listItems })
   const run = useRunStream(turn.runId, (id) => data?.items.find((i) => i.id === id)?.title)
 
+  // 做过的事在上，说的话在下：那一行是这次动过什么的凭据，话是结论
   return (
     <article className="talk-turn">
       <p className="talk-asked">{turn.asked}</p>
-      {run.done
-        ? (run.message
-          ? <Markup text={run.message} />
-          : <ErrorState error={new Error('这次没有生成回复。原文已存。')} />)
-        : <Working steps={run.steps} />}
+      {/* 一步都没有又已经收尾，这一行没有内容可播，空壳比没有更差 */}
+      {(run.steps.length > 0 || !run.done) && (
+        <Steps steps={run.steps} running={!run.done} settled={run.done && !run.disconnected} />
+      )}
+      {run.done && (run.disconnected
+        ? <p className="talk-note">连接中断，未能收到回复。原文已存。</p>
+        // 跑失败时服务端给的就是一句交代，不是回复。走标记渲染会让它看起来像一条
+        // 正常答复，而它不是
+        : run.failed
+          ? <p className="talk-note talk-failed">{run.message ?? '这次没有跑完。原文已存。'}</p>
+          : run.message
+            ? <Markup text={run.message} />
+            : <p className="talk-note">这次没有生成回复。原文已存。</p>)}
     </article>
   )
 }
 
 /**
- * 进行中。
+ * 这次动过哪些东西。
  *
- * 收起时只有一行，说的是它此刻在看哪一样东西，不是它走到第几步。走过的步骤要
- * 看得见，但那是展开之后的事。
+ * 收起时只有一行，说的是它动的哪一样东西，不是它走到第几步。跑完之后这一行留下，
+ * 只把球撤掉——它是这次做了什么的凭据，跟着结论一起消失就没人能对账了。
+ *
+ * settled 与 running 是两件事：流断在半路时，最后那一步究竟做完没有客户端并不
+ * 知道，所以它停在「正在…」，不改口说「已…」。
  */
-function Working({ steps }: { steps: { at: string; text: string }[] }) {
+function Steps({ steps, running, settled }: { steps: RunStep[]; running: boolean; settled: boolean }) {
   const [open, setOpen] = useState(false)
-  const latest = steps[steps.length - 1]?.text ?? '正在处理'
+  const last = steps.length - 1
+  const latest = steps[last]
 
   return (
     <div className="talk-working">
-      <button className="talk-latest" onClick={() => setOpen((v) => !v)} disabled={steps.length === 0}>
-        <span className="talk-spinner" aria-hidden />
-        <span>{latest}</span>
+      <button className="talk-latest" onClick={() => setOpen((v) => !v)} disabled={steps.length < 2}>
+        {/*
+          行首那一格始终有东西：球撤掉之后如果什么都不放，整行会往左跳一截。
+          三种收场各有各的记号，也省得只靠时态去分辨。
+        */}
+        {running
+          ? <Orbs />
+          : settled
+            ? <Check className="talk-mark" size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />
+            : <Unplug className="talk-mark" size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />}
+        <span>{latest ? stepText(latest, settled) : '正在处理'}</span>
         {steps.length > 1 && <span className="talk-count">{open ? '收起' : `${steps.length} 步`}</span>}
       </button>
 
@@ -75,7 +98,8 @@ function Working({ steps }: { steps: { at: string; text: string }[] }) {
             exit={{ opacity: 0, height: 0 }}
             transition={transition.base}
           >
-            {steps.map((s, i) => <li key={i}>{s.text}</li>)}
+            {/* 后面还有一步，就说明这一步已经收了；只有最末一步的时态要看整次跑完没有 */}
+            {steps.map((s, i) => <li key={i}>{stepText(s, i < last || settled)}</li>)}
           </motion.ol>
         )}
       </AnimatePresence>

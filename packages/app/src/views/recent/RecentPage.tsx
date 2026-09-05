@@ -1,9 +1,10 @@
-import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Image, FileText, Mic, CalendarDays } from 'lucide-react'
 import { api, queryKeys, type RecentEntry } from '../../api.ts'
 import { ICON } from '../../tokens/icons.ts'
 import { DayLabel } from '../../shell/DayLabel.tsx'
+import { ItemRow } from '../../shell/ItemRow.tsx'
+import { Markup } from '../../shell/Markup.tsx'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
 import { formatTime } from '../../lib/format.ts'
 import './recent.css'
@@ -58,13 +59,16 @@ function Drop({ entry: { fragment, run, items } }: { entry: RecentEntry }) {
       <div className="drop-body">
         {items.length > 0 && (
           <ul className="plain-list">
+            {/*
+              产出的条目用全 App 那一行。待确认的行尾说「待确认」，其余交给它自己
+              按日期显示——这一页原来什么都不显示，那是少给了一条已经知道的信息。
+            */}
             {items.map((item) => (
-              <li key={item.id}>
-                <Link className="row" to={`/items/${item.id}`}>
-                  <span className="row-title">{item.title}</span>
-                  {item.status === 'needs_confirm' && <span className="row-meta">待确认</span>}
-                </Link>
-              </li>
+              <ItemRow
+                key={item.id}
+                item={item}
+                meta={item.status === 'needs_confirm' ? '待确认' : undefined}
+              />
             ))}
           </ul>
         )}
@@ -74,8 +78,13 @@ function Drop({ entry: { fragment, run, items } }: { entry: RecentEntry }) {
           失败这里没有「重试」——服务端没有重跑某条碎片的口，摆一个按不动的
           按钮比不摆更糟。原文已经存住了，重投一次就是。
         */}
-        {items.length === 0 && run?.message && (
-          <p className={failed ? 'drop-note drop-failed' : 'drop-note'}>{run.message}</p>
+        {items.length === 0 && run?.message && (failed
+          ? <p className="drop-note drop-failed">{run.message}</p>
+          /*
+            零条目的另一半是「他问的不是新东西，是库里已有的事」——那条回答就住在
+            这里，而它带标记。当成纯文字显示的话，屏幕上留下的是一串裸 id。
+          */
+          : <div className="drop-note"><Markup text={run.message} /></div>
         )}
       </div>
     </li>
@@ -100,12 +109,18 @@ function groupByDay(entries: RecentEntry[]): [string, RecentEntry[]][] {
   return [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0]))
 }
 
+/*
+ * 投放的形态。原文有字的时候，这个图标是「它是图还是语音」的唯一出处，所以它
+ * 不是装饰——读屏器要念得出来。
+ */
 function SourceIcon({ rawType }: { rawType: string }) {
-  const props = { size: ICON.sizeSmall, strokeWidth: ICON.stroke, className: 'drop-icon' }
-  if (rawType === 'image') return <Image {...props} />
-  if (rawType === 'audio') return <Mic {...props} />
-  if (rawType === 'structured') return <CalendarDays {...props} />
-  return <FileText {...props} />
+  const props = {
+    size: ICON.sizeSmall, strokeWidth: ICON.stroke, className: 'drop-icon', role: 'img',
+  }
+  if (rawType === 'image') return <Image {...props} aria-label="图片" />
+  if (rawType === 'audio') return <Mic {...props} aria-label="语音" />
+  if (rawType === 'structured') return <CalendarDays {...props} aria-label="同步" />
+  return <FileText {...props} aria-label="文字" />
 }
 
 /**

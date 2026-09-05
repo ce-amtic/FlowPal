@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Settings } from 'lucide-react'
 import { api, queryKeys, usingMock } from '../api.ts'
@@ -19,8 +19,6 @@ const PAGES = [
 ]
 
 export function TitleBar({ onOpenPending }: { onOpenPending: () => void }) {
-  const navigate = useNavigate()
-
   const { data } = useQuery({ queryKey: queryKeys.confirmations, queryFn: api.listConfirmations })
   const pending = data?.count ?? 0
 
@@ -38,24 +36,24 @@ export function TitleBar({ onOpenPending }: { onOpenPending: () => void }) {
         {/* 样例数据必须看得见。最怕的失败是拿着它演了却不知道 */}
         {usingMock && <span className="tag mock">样例数据</span>}
 
-        {/* 记录口在「此刻」，这里只是把人和焦点一起带回去 */}
-        <button
-          className="icon-button"
-          aria-label="记录"
-          onClick={() => navigate('/now', { state: { focusComposer: true } })}
-        >
-          <Plus size={ICON.size} strokeWidth={ICON.stroke} />
-        </button>
+        {/*
+          记录口在「此刻」，这里只是把人和焦点一起带回去。它去的是一页，不是做一件事，
+          所以是链接不是按钮——后退能撤销的东西必须让浏览器与读屏器认出来是导航。
+        */}
+        <Link className="icon-button" to="/now" state={{ focusComposer: true }} aria-label="记录">
+          <Plus size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />
+        </Link>
 
+        {/* 待确认是浮层，开它不改地址，所以它是按钮 */}
         {pending > 0 && (
           <button className="icon-button badge" onClick={onOpenPending}>
             {pending} 条待确认
           </button>
         )}
 
-        <button className="icon-button" onClick={() => navigate('/settings')} aria-label="设置">
-          <Settings size={ICON.size} strokeWidth={ICON.stroke} />
-        </button>
+        <Link className="icon-button" to="/settings" aria-label="设置">
+          <Settings size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />
+        </Link>
       </div>
     </header>
   )

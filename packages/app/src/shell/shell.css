@@ -21,6 +21,18 @@ body.in-electron { background: var(--bg-solid); }
 /* macOS 才有毛玻璃，body 让开，露出它 */
 body.on-mac { background: var(--bg-window); }
 
+/*
+ * 焦点圈。全 App 一条规则，不给任何元素单独定制——键盘用户判断「焦点在哪」
+ * 靠的是同一个形状反复出现，各处长得不一样等于每一页都要重新认一遍。
+ *
+ * 用 outline 而不是 box-shadow 模拟：outline 不占布局、跟着圆角走，而且在
+ * 强制高对比模式下系统会替换它。:focus-visible 而非 :focus，鼠标点击不画圈。
+ */
+:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 2px;
+}
+
 .shell {
   display: flex;
   flex-direction: column;
@@ -61,6 +73,10 @@ body.in-electron:not(.on-mac) .titlebar { padding-right: var(--window-controls-w
 }
 
 .nav a {
+  display: inline-flex;
+  align-items: center;
+  /* 一格导航是可点的东西，命中区不能只有一行小字那么高。44px 的栏正好容得下 */
+  min-height: var(--target-min);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-pill);
   font-size: var(--text-aux);
@@ -77,12 +93,13 @@ body.in-electron:not(.on-mac) .titlebar { padding-right: var(--window-controls-w
   background: var(--card);
 }
 
+/* 图标按钮。图标只有 16px，命中区靠这两个最小值撑出来，图标本身不跟着变大 */
 .icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 24px;
-  min-width: 24px;
+  min-height: var(--target-min);
+  min-width: var(--target-min);
   padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-pill);
@@ -90,6 +107,7 @@ body.in-electron:not(.on-mac) .titlebar { padding-right: var(--window-controls-w
   color: var(--fg-dim);
   font: inherit;
   font-size: var(--text-aux);
+  text-decoration: none;
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
@@ -177,6 +195,8 @@ body.in-electron:not(.on-mac) .titlebar { padding-right: var(--window-controls-w
   display: flex;
   align-items: baseline;
   gap: var(--space-3);
+  /* 一行文字加上下内边距在鼠标下够用，手指下不够——差的那几像素由它补上 */
+  min-height: var(--target-min);
   margin: 0 calc(var(--space-3) * -1);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-box);
@@ -319,22 +339,45 @@ a.row:hover { background: var(--row-hover); }
 .confirm-actions {
   flex: 0 0 auto;
   display: flex;
-  gap: var(--space-3);
+  /* 两颗按钮各自把命中区往外撑了一截，间距要留够，否则两个命中区叠在一起 */
+  gap: var(--space-4);
 }
 
-/* 次要动作。按钮和链接都用它——同一个分量的操作长成同一个样子 */
+/*
+ * 次要动作。
+ *
+ * 它是按钮，不是文字链接：一行裸字的命中区只有那几个字那么大，指头按不准，
+ * 键盘上也看不出它可按。所以给它真正的按钮形状——一指宽的最小高度、左右内边距、
+ * 悬停一层浅底。
+ *
+ * 分量仍然是次要的：底色只在悬停时出现，字号和弱色都不变。撑出来的那圈内边距
+ * 由等量的负外边距收回去，所以文字站的位置和原来一样——命中区可以大于视觉，
+ * 视觉不必跟着变大。
+ */
 .quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-min);
+  /*
+   * 只写左右。shell.css 排在各页样式之后，用 margin 简写会把页面给这颗按钮的
+   * 上下外边距一并清掉——专注页那颗「结束」原本靠 margin-top 和倒计时断开。
+   */
+  margin-inline: calc(var(--space-2) * -1);
   border: 0;
-  padding: 0;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
   background: none;
   color: var(--fg-dim);
   font: inherit;
   font-size: var(--text-aux);
+  text-decoration: none;
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 
-.quiet:hover { color: var(--fg); }
+/* 用行悬停那层底而不是卡片底：这几颗按钮有一半站在卡片上，卡片底在那儿是隐形的 */
+.quiet:hover:not(:disabled) { color: var(--fg); background: var(--row-hover); }
 .quiet:disabled { cursor: default; opacity: 0.5; }
 
 /*
@@ -350,6 +393,10 @@ a.row:hover { background: var(--row-hover); }
 }
 
 .choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-min);
   border: 0;
   border-radius: var(--radius-pill);
   padding: var(--space-2) var(--space-4);
@@ -377,6 +424,9 @@ a.row:hover { background: var(--row-hover); }
 }
 
 .state-error button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
   margin-top: var(--space-2);
   border: 0;
   border-radius: var(--radius-pill);

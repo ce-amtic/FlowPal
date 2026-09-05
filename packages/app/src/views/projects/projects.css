@@ -13,8 +13,9 @@
  */
 .project-row {
   display: block;
-  margin: 0 calc(var(--space-4) * -1);
-  padding: var(--space-4);
+  /* 横向内缩取和条目行同一个数：两种行的图标锚点这样才落在同一列上 */
+  margin: 0 calc(var(--space-3) * -1);
+  padding: var(--space-4) var(--space-3);
   border-radius: var(--radius-box);
   color: inherit;
   text-decoration: none;
@@ -23,16 +24,28 @@
 
 .project-row:hover { background: var(--row-hover); }
 
+/* 图标、名字、行尾——和条目行同一个骨架，只是三样东西各自换了内容 */
 .project-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .project-name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--text-lead);
   line-height: var(--leading-tight);
+}
+
+/*
+ * 名字以下的几行缩进到名字那一列。图标在左边占了一列，不缩进的话它们会从图标
+ * 底下起头，那一列的锚点就断了。
+ */
+.project-next,
+.project-note,
+.project-counts {
+  padding-left: calc(16px + var(--space-3));
 }
 
 /* 「多久没动」是这一页的核心，但语气要平——它是事实，不是责备 */

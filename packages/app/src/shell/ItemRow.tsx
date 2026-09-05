@@ -40,10 +40,19 @@ export function ItemRow({ item, note, meta }: {
       <Link className="row" to={`/items/${item.id}`}>
         <Icon className="row-icon" size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />
         <span className="row-title">{item.title}</span>
-        <span className="row-meta" data-soon={left !== null && left <= SOON_DAYS ? '' : undefined}>
-          {meta ?? (item.dueAt
-            ? formatDue(item.dueAt)
-            : item.startsAt ? formatAt(item.startsAt, item.datePrecision) : '')}
+        {/*
+          做完的事行尾留空，也不标「紧」：它的日期已经过去了，算出来是「已过期 3 天」，
+          挂在一件做完的事后面就是在催一件不存在的事。
+        */}
+        <span
+          className="row-meta"
+          data-soon={item.status !== 'done' && left !== null && left <= SOON_DAYS ? '' : undefined}
+        >
+          {meta ?? (item.status === 'done'
+            ? ''
+            : item.dueAt
+              ? formatDue(item.dueAt)
+              : item.startsAt ? formatAt(item.startsAt, item.datePrecision) : '')}
         </span>
       </Link>
       {note && <p className="row-note">{note}</p>}

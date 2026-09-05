@@ -38,7 +38,8 @@ export function AgendaPage() {
     <div className="agenda">
       {recurring.length > 0 && (
         <p className="recurring">
-          <Repeat size={ICON.sizeSmall} strokeWidth={ICON.stroke} />
+          {/* 「每周」那几个字就在旁边，图标只是重复一遍，读屏器跳过它 */}
+          <Repeat size={ICON.sizeSmall} strokeWidth={ICON.stroke} aria-hidden />
           {recurring.map(({ item }) => (
             <span key={item.id}>
               {item.title}

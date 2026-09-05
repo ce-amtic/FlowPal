@@ -1,6 +1,7 @@
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, queryKeys, type ItemWithSources } from '../../api.ts'
+import { ItemRow } from '../../shell/ItemRow.tsx'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
 import { formatAt, formatDay } from '../../lib/format.ts'
 import './projects.css'
@@ -49,13 +50,9 @@ export function ProjectPage() {
         <section className="group">
           <h2 className="group-label">说过的</h2>
           <ul className="plain-list">
+            {/* 说过的那几句本来就是状态类条目，用同一行呈现；日期挪到行尾，和别处一致 */}
             {said.map((s) => (
-              <li key={s.id}>
-                <Link className="row" to={`/items/${s.id}`}>
-                  <span className="stamp">{formatDay(s.createdAt)}</span>
-                  <span className="row-title">{s.title}</span>
-                </Link>
-              </li>
+              <ItemRow key={s.id} item={s} meta={formatDay(s.createdAt)} />
             ))}
           </ul>
         </section>
@@ -73,22 +70,24 @@ function Group({
     <section className="group">
       <h2 className="group-label">{label}</h2>
       <ul className="plain-list">
-        {items.map((item) => {
-          const at = item.startsAt ?? item.dueAt
-          return (
-            <li key={item.id}>
-              <Link className="row" to={`/items/${item.id}`}>
-                {withDate && at && (
-                  <span className="stamp">
-                    {formatDay(at)} {formatAt(at, item.datePrecision)}
-                  </span>
-                )}
-                <span className="row-title">{item.title}</span>
-              </Link>
-            </li>
-          )
-        })}
+        {items.map((item) => (
+          <ItemRow key={item.id} item={item} meta={groupMeta(item, withDate)} />
+        ))}
       </ul>
     </section>
   )
+}
+
+/**
+ * 行尾。「接下来」那一组按时间排，所以连日期带时刻都要给——只给时刻读不出先后。
+ *
+ * 其余两组行尾留空，尤其是已完成：那一条的日期已经过去了，交给行自己算的话，
+ * 一件做完的事后面会挂上「已过期 3 天」，那是在催一件不存在的事。
+ */
+function groupMeta(item: ItemWithSources, withDate: boolean): string {
+  if (!withDate) return ''
+  const at = item.startsAt ?? item.dueAt
+  if (!at) return ''
+  const time = formatAt(at, item.datePrecision)
+  return time ? `${formatDay(at)} ${time}` : formatDay(at)
 }

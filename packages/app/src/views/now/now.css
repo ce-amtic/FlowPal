@@ -56,17 +56,26 @@
   box-shadow: var(--card-shadow);
 }
 
-/* 事情的名字。小字、弱色：它是上下文，不是这一屏要读的那句 */
+/*
+ * 事情的名字。小字、弱色：它是上下文，不是这一屏要读的那句。
+ *
+ * 它同时是通往条目详情的入口，所以命中区要有一指宽。撑出来的那一圈由负外边距
+ * 收回去：名字站的位置、和下面那一步之间的距离都不变。
+ */
 .now-title {
-  display: inline-block;
-  margin-bottom: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1) 0;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
   color: var(--fg-dim);
   font-size: var(--text-aux);
   text-decoration: none;
-  transition: color var(--dur-fast) var(--ease);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 
-.now-title:hover { color: var(--accent); }
+.now-title:hover { color: var(--accent); background: var(--row-hover); }
 
 /* 这一句是全 App 最大的字。它是用户此刻唯一需要读进去的东西 */
 .now-step {
@@ -91,6 +100,11 @@
 }
 
 button.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 「记录」比这颗小一号，小到会跌破最小命中面积——下限在这里一次给全 */
+  min-height: var(--target-min);
   border: 0;
   border-radius: var(--radius-pill);
   padding: var(--space-2) var(--space-6);
@@ -138,6 +152,18 @@ button.primary:hover { opacity: 0.88; }
 
 .composer:focus-within { background: var(--field-focus); }
 .composer-floating:focus-within { background: var(--surface); }
+
+/*
+ * 焦点圈画在整块底上，不画在里面那个 textarea 上：输入框贴着这块底的内边距，
+ * 单给它一圈会在框里再套一个框。换底色是提示但不是焦点指示——底色也随悬停变。
+ */
+.composer:has(.composer-box:focus-visible) {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 2px;
+}
+
+/* 输入框自己不画圈。这条要压得住全局那条，所以选择器带上 :focus-visible */
+.composer-box:focus-visible { outline: none; }
 
 .composer-box {
   display: block;

@@ -4,9 +4,10 @@
   margin-top: var(--space-12);
 }
 
+/* 「清空」现在有按钮的高度，标题跟它对中线；对基线会把整块顶歪 */
 .talk-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: var(--space-5);
 }
@@ -27,37 +28,54 @@
 
 .talk-working { color: var(--fg-dim); }
 
+/*
+ * 这一行本身可点（展开看全部），所以它按按钮办：够高、有悬停底、撑出来的左右用
+ * 负外边距收回去，文字仍从正文那条竖线开始。
+ */
 .talk-latest {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-height: var(--target-min);
+  margin-inline: calc(var(--space-2) * -1);
   border: 0;
-  padding: 0;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
   background: none;
   color: inherit;
   font: inherit;
+  text-align: left;
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
 }
 
+.talk-latest:hover:not(:disabled) { background: var(--row-hover); }
+
+/* 只有一步时不可展开。但它照样是这次动过什么的凭据，不能跟着淡下去 */
 .talk-latest:disabled { cursor: default; }
+
+/* 收场的记号，占球那一格，弱于那句话本身 */
+.talk-mark {
+  flex: 0 0 auto;
+  color: var(--fg-faint);
+}
 
 .talk-count {
   color: var(--fg-faint);
   font-size: var(--text-aux);
 }
 
-/* 转起来的那一点。它是「还在做」的唯一提示，所以不跟着「减弱动态」停掉，只放慢 */
-.talk-spinner {
-  flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  border-radius: var(--radius-pill);
-  border: 1.5px solid var(--accent-line);
-  border-top-color: transparent;
-  animation: talk-spin var(--dur-spin) linear infinite;
+/*
+ * 没有回复可读时的那一行交代。不套错误面板：原文已经入库，这里要说的是结果，
+ * 不是「加载失败」。
+ */
+.talk-note {
+  margin: 0;
+  color: var(--fg-dim);
 }
 
-@keyframes talk-spin { to { transform: rotate(360deg); } }
+/* 这一次确实没跑成。仍不套错误面板——原文已经入库，没有东西要重试 */
+.talk-failed { color: var(--danger); }
 
 .talk-steps {
   overflow: hidden;
