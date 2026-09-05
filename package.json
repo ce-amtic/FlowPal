@@ -10,6 +10,7 @@
     "dev:mock": "pnpm --filter @flowpal/app dev:mock",
     "dev:desktop": "pnpm --filter @flowpal/desktop dev",
     "check:fixtures": "pnpm --filter @flowpal/server check:fixtures",
+    "bench:now": "pnpm --filter @flowpal/server bench:now",
     "check:tokens": "pnpm --filter @flowpal/app check:tokens",
     "check": "pnpm typecheck && pnpm check:tokens && pnpm check:fixtures",
     "demo:reset": "pnpm --filter @flowpal/server demo:reset",
