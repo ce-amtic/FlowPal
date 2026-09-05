@@ -189,9 +189,33 @@ a.row:hover { background: var(--row-hover); }
 
 .row-title { flex: 1 1 auto; min-width: 0; }
 
+/*
+ * 类型图标。它给每一行一个左端的锚点——没有它，一行就是「文字、大片空白、文字」。
+ * 对齐到首行文字的基线附近，行高变了也不会浮起来。
+ */
+.row-icon {
+  flex: 0 0 auto;
+  align-self: center;
+  color: var(--fg-faint);
+}
+
 /* 行尾的次要信息：时间、地点、项目。它不参与换行竞争 */
 .row-meta {
   flex: 0 0 auto;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+/*
+ * 快到期的那一行的时间用强调色，不用红色——红色留给出错。一件明天要交的事本身
+ * 不是错误，标红就成了催。
+ */
+.row-meta[data-soon] { color: var(--accent); }
+
+/* 补充说明挂在标题下面：它是解释，从属于上面那一行 */
+.row-note {
+  margin: 0 0 var(--space-2);
+  padding-left: calc(var(--space-3) + 16px + var(--space-3));
   color: var(--fg-dim);
   font-size: var(--text-aux);
 }

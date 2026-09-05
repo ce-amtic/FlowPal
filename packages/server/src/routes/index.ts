@@ -151,6 +151,17 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     const run = startRun(db, ctx, fragment.id)
     broadcastChanged(ctx.now)
 
+    /*
+     * 循环放到后台跑，这里立刻把 run 交出去。
+     *
+     * 同步等到跑完的话，调用方在几十秒里唯一能显示的就是一句「正在理解」——而这
+     * 期间它其实一直在看具体的东西。拿到 run.id 才订阅得了 /api/runs/:id/events，
+     * 那条流里逐步播的正是它在看什么。
+     */
+    void process()
+    return c.json({ fragment, run }, 202)
+
+    async function process(): Promise<void> {
     let items: ItemWithSources[] = []
     try {
       if (fragment.rawType === 'structured') {
@@ -187,10 +198,10 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
       finishRun(db, ctx, run.id, 'failed', message, null)
       emitRunFinished(run.id, getRun(db, run.id) as Run)
     }
+    // 抽出来的条目由这一条广播让各页自己重取，不再随响应回去
+    void items
     broadcastChanged(ctx.now)
-
-    // plans 字段保留为空数组：循环里没有 MergePlan 这一层，但旧客户端仍会读这个键。
-    return c.json({ fragment, run: getRun(db, run.id), items, plans: [] })
+    }
   })
 
   /** 只理解、不落库。调 prompt 时打这个口，不用开界面。 */

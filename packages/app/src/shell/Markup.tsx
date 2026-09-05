@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { parseMarkup, type MarkupBlock, type MarkupElement } from '@flowpal/shared'
+import { parseMarkup, type MarkupBlock } from '@flowpal/shared'
 import { api, queryKeys, type ItemWithSources } from '../api.ts'
-import { formatAt, formatDue } from '../lib/format.ts'
+import { ItemRow } from './ItemRow.tsx'
 import './markup.css'
 
 /**
@@ -62,31 +62,7 @@ function renderBlock(
 
   return (
     <ul className="plain-list markup-run" key={key}>
-      {rows.map(({ el, item }, i) => <ItemRow el={el} item={item!} key={i} />)}
+      {rows.map(({ el, item }, i) => <ItemRow item={item!} note={el.body} key={i} />)}
     </ul>
   )
-}
-
-/**
- * 一条。左边是它自己的事实，右边是日期；模型那句判断挂在下面一行。
- *
- * 判断在视觉上从属于事实——它是解释，不是这条东西本身。
- */
-function ItemRow({ el, item }: { el: MarkupElement; item: ItemWithSources }) {
-  return (
-    <li>
-      <Link className="row markup-row" to={`/items/${item.id}`}>
-        <span className="row-title">{item.title}</span>
-        <span className="row-meta">{when(item)}</span>
-      </Link>
-      {el.body && <p className="markup-note">{el.body}</p>}
-    </li>
-  )
-}
-
-/** 日期一律由这里算，模型给什么都不采信 */
-function when(item: ItemWithSources): string {
-  if (item.dueAt) return formatDue(item.dueAt)
-  if (item.startsAt) return formatAt(item.startsAt, item.datePrecision)
-  return ''
 }

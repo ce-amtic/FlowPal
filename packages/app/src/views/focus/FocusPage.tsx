@@ -135,7 +135,6 @@ export function FocusPage() {
             floating={false}
             onHeight={() => {}}
             placeholder="想到别的，先记在这里"
-            linkItems={false}
           />
         </div>
       )}

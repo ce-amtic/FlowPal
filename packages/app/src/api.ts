@@ -132,12 +132,17 @@ export type Api = {
   getItem: (id: string) => Promise<{ item: ItemWithSources; history: ItemHistoryRow[] }>
   getFragment: (id: string) => Promise<{ fragment: Fragment }>
   patchItem: (id: string, patch: Record<string, string | null>) => Promise<{ item: ItemWithSources }>
+  /**
+   * 投一条进去。它立刻返回，循环在服务端接着跑——拿 run.id 订阅
+   * `/api/runs/:id/events` 才看得见它这几十秒里在看什么。抽出的条目不随这个
+   * 响应回来，由 SSE 那条「变了」让各页自己重取。
+   */
   throwIn: (body: {
     source: string
     rawType: string
     rawText?: string
     rawBlobPath?: string
-  }) => Promise<{ fragment: Fragment; run: Run; items: ItemWithSources[] }>
+  }) => Promise<{ fragment: Fragment; run: Run }>
   getNow: () => Promise<NowView>
   /** 「重新想一个」：只清缓存，下一次取数重新生成 */
   refreshNow: () => Promise<{ ok: boolean }>

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { ItemRow } from '../../shell/ItemRow.tsx'
 import { useQuery } from '@tanstack/react-query'
 import { Repeat } from 'lucide-react'
 import { api, queryKeys, type AgendaEntry } from '../../api.ts'
@@ -52,12 +53,7 @@ export function AgendaPage() {
           <DayLabel day={day} />
           <ul className="plain-list">
             {items.map((entry) => (
-              <li key={entry.item.id}>
-                <Link className="row" to={`/items/${entry.item.id}`}>
-                  <span className="row-title">{entry.item.title}</span>
-                  <span className="row-meta">{meta(entry)}</span>
-                </Link>
-              </li>
+              <ItemRow item={entry.item} meta={meta(entry)} key={entry.item.id} />
             ))}
           </ul>
         </section>

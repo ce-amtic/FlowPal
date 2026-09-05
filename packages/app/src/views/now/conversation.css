@@ -1,0 +1,70 @@
+/* 说过的话。接在「接下来」之后，是这一页的末尾 */
+
+.talk {
+  margin-top: var(--space-12);
+}
+
+.talk-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+
+.talk-head .group-label { margin: 0; }
+
+/* 一次来回之间断开，比一次来回内部的间距大得多 */
+.talk-turn + .talk-turn { margin-top: var(--space-10); }
+
+/*
+ * 自己刚打的那句：小而淡。真正要读的是下面那段答案，不是重读一遍自己的问题。
+ */
+.talk-asked {
+  margin: 0 0 var(--space-3);
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+.talk-working { color: var(--fg-dim); }
+
+.talk-latest {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.talk-latest:disabled { cursor: default; }
+
+.talk-count {
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+/* 转起来的那一点。它是「还在做」的唯一提示，所以不跟着「减弱动态」停掉，只放慢 */
+.talk-spinner {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--accent-line);
+  border-top-color: transparent;
+  animation: talk-spin var(--dur-spin) linear infinite;
+}
+
+@keyframes talk-spin { to { transform: rotate(360deg); } }
+
+.talk-steps {
+  overflow: hidden;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+.talk-steps li + li { margin-top: var(--space-1); }

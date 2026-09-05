@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { RefreshCw } from 'lucide-react'
+import { ArrowRight, RefreshCw } from 'lucide-react'
 import { api, queryKeys } from '../../api.ts'
 import { ICON } from '../../tokens/icons.ts'
 import { transition } from '../../tokens/motion.ts'
 import { ErrorState, Loading } from '../../shell/State.tsx'
 import { Pebble } from '../../pebble/Pebble.tsx'
-import { daysBetween, formatAt, formatDay, formatDue } from '../../lib/format.ts'
+import { daysBetween } from '../../lib/format.ts'
+import { ItemRow } from '../../shell/ItemRow.tsx'
 import { Composer } from './Composer.tsx'
+import { Conversation, type Turn } from './Conversation.tsx'
 import './now.css'
 
 /**
@@ -40,6 +42,12 @@ export function NowPage() {
 
   // 记录框钉在底部时脱离布局，正文末尾要留出它那么高的空，否则最后一行被压住
   const [composerHeight, setComposerHeight] = useState(0)
+
+  /*
+   * 说过的话。只活在这次会话里，不落库——真相在库里，不在这段对话里，所以清掉它
+   * 不会丢任何东西。
+   */
+  const [turns, setTurns] = useState<Turn[]>([])
 
   const refresh = useMutation({
     mutationFn: api.refreshNow,
@@ -158,9 +166,17 @@ export function NowPage() {
         floating={isLoading || candidate !== undefined}
         onHeight={setComposerHeight}
         droppedPaths={droppedPaths}
+        onStarted={(asked, runId) =>
+          setTurns((t) => [...t, { key: runId, asked, runId }])}
       />
 
+      {/*
+        「接下来」留在卡片后面：它是「剩下的没丢」的凭据，位置不能被说过的话挤走。
+        对话追加在整页最末尾，新的一轮总在最下面。
+      */}
       <Upcoming />
+
+      <Conversation turns={turns} onClear={() => setTurns([])} />
     </div>
   )
 }
@@ -189,21 +205,12 @@ function Upcoming() {
     <section className="upcoming">
       <h2 className="group-label">接下来</h2>
       <ul className="plain-list">
-        {within.map(({ day, item }) => (
-          <li key={item.id}>
-            <Link className="row" to={`/items/${item.id}`}>
-              <span className="stamp">{formatDay(day)}</span>
-              <span className="row-title">{item.title}</span>
-              <span className="row-meta">
-                {item.dueAt ? formatDue(item.dueAt) : formatAt(item.startsAt ?? day, item.datePrecision)}
-              </span>
-            </Link>
-          </li>
-        ))}
+        {within.map(({ item }) => <ItemRow item={item} key={item.id} />)}
         {beyond > 0 && (
           <li>
+            {/* 通往日程。留出图标那一列的宽度，它才和上面几行对齐 */}
             <Link className="row" to="/agenda">
-              <span className="stamp" />
+              <ArrowRight className="row-icon" size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />
               <span className="row-title row-more">还有 {beyond} 件</span>
             </Link>
           </li>
