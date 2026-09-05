@@ -121,7 +121,11 @@ function SyncSection() {
 
       {data && (
         <>
-          <p className="settings-status">{describe(data)}</p>
+          {/*
+            一轮同步要按周打十几次门户，几十秒才回来。不说这一句的话，那几十秒里
+            页面上什么都不动，与坏掉了长得一样。
+          */}
+          <p className="settings-status">{busy ? working(signIn.isPending) : describe(data)}</p>
 
           <div className="choices">
             <button className="choice" disabled={busy} onClick={() => signIn.mutate()}>
@@ -164,6 +168,12 @@ function SyncSection() {
       {signOut.error && <ErrorState error={signOut.error} />}
     </section>
   )
+}
+
+function working(signingIn: boolean): string {
+  return signingIn
+    ? '登录窗口已经打开，在那里完成登录。'
+    : '正在对课表与校历，要几十秒。'
 }
 
 /**
