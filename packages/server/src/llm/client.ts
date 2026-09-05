@@ -48,6 +48,66 @@ function isResponseFormatUnavailable(e: unknown): boolean {
     String((e as { message?: string }).message).includes('response_format')
 }
 
+export type AgentToolSpec = {
+  name: string
+  description: string
+  /** z.toJSONSchema 产物。 */
+  parameters: unknown
+  /** 仅 createItem 用 strict；其余工具 partial 参数不适合 strict。 */
+  strict?: boolean
+}
+
+export type AgentToolCall = {
+  id: string
+  name: string
+  args: Record<string, unknown>
+}
+
+export type AgentCallResult = {
+  text: string | null
+  toolCalls: AgentToolCall[]
+}
+
+/**
+ * agent 循环用：带工具的 chat completions。与 callJson 是两种用法——
+ * callJson 给「此刻」这种一次只读生成用，这里给要改库的循环用。
+ * 工具参数不合法由我们的 executeTool 返回错误，允许模型在下一步改。
+ */
+export async function callAgent(
+  model: ModelConfig,
+  call: { messages: OpenAI.Chat.ChatCompletionMessageParam[]; tools: AgentToolSpec[] },
+): Promise<AgentCallResult> {
+  const client = new OpenAI({ baseURL: model.baseUrl, apiKey: model.apiKey })
+  const res = await client.chat.completions.create({
+    model: model.model,
+    messages: call.messages,
+    tools: call.tools.map((t) => ({
+      type: 'function' as const,
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters as any,
+        ...(t.strict ? { strict: true } : {}),
+      },
+    })),
+    tool_choice: 'auto',
+  })
+
+  const msg = res.choices[0]?.message
+  const toolCalls: AgentToolCall[] = []
+  for (const tc of msg?.tool_calls ?? []) {
+    let args: Record<string, unknown> = {}
+    try {
+      args = JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>
+    } catch {
+      // 工具参数不是合法 JSON 是模型/网关问题，大声失败，不猜着修。
+      throw new Error(`工具调用参数不是合法 JSON：${tc.function.name} / ${tc.function.arguments}`)
+    }
+    toolCalls.push({ id: tc.id, name: tc.function.name, args })
+  }
+  return { text: msg?.content ?? null, toolCalls }
+}
+
 async function attempt(
   client: OpenAI, model: ModelConfig, call: JsonCall,
   responseFormat: OpenAI.Chat.Completions.ChatCompletionCreateParams['response_format'],

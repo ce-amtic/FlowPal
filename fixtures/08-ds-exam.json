@@ -1,20 +1,20 @@
 {
-  "now": "2026-10-16T19:30:00+08:00",
+  "now": "2026-10-20T10:00:00+08:00",
   "fragment": {
     "source": "paste",
     "rawType": "text",
-    "rawText": "高数作业做到第三题，卡在积分不会做了。"
+    "rawText": "数据结构期中考试安排在11月3日下午两点，教三3101。"
   },
   "expect": {
     "count": 1,
     "types": [
-      "progress"
+      "event"
+    ],
+    "dates": [
+      "2026-11-03T14:00:00+08:00"
     ],
     "statuses": [
       "active"
-    ],
-    "projects": [
-      "高等数学"
     ],
     "created": 1,
     "updated": 0,

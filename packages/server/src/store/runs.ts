@@ -45,6 +45,34 @@ export function listRuns(db: DatabaseSync): Run[] {
   return rows.map(rowToRun)
 }
 
+export type StoredToolCallEvent = {
+  at: string
+  step: number
+  tool: string
+  args: Record<string, unknown>
+}
+
+/** 工具调用流先落库再推：客户端中途连上也能拿到完整回放。 */
+export function appendRunEvent(
+  db: DatabaseSync, runId: string, seq: number, at: string, tool: string, args: Record<string, unknown>,
+): void {
+  db.prepare(
+    `INSERT INTO run_events (id, run_id, seq, at, tool, args) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(newId('rne'), runId, seq, at, tool, JSON.stringify(args))
+}
+
+export function listRunEvents(db: DatabaseSync, runId: string): StoredToolCallEvent[] {
+  const rows = db.prepare(
+    `SELECT * FROM run_events WHERE run_id = ? ORDER BY seq`,
+  ).all(runId) as Record<string, any>[]
+  return rows.map((r) => ({
+    at: r.at,
+    step: r.seq,
+    tool: r.tool,
+    args: JSON.parse(r.args) as Record<string, unknown>,
+  }))
+}
+
 function rowToRun(row: Record<string, any>): Run {
   return {
     id: row.id,

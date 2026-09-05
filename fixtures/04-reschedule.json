@@ -16,8 +16,8 @@
     "statuses": [
       "active"
     ],
-    "plans": [
-      "reschedule"
-    ]
+    "created": 0,
+    "updated": 1,
+    "needsConfirm": 0
   }
 }

@@ -2,22 +2,30 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
-import type { Calendar } from '@flowpal/shared'
-import { createCtx, nowInShanghai, FragmentSource, RawType } from '@flowpal/shared'
-import type { MergePlan } from '@flowpal/shared'
+import type { Calendar, Run } from '@flowpal/shared'
+import { createCtx, nowInShanghai, FragmentSource, RawType, NowOutput, nowJsonSchema } from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
-import { applyPlans, getItem, itemHistory, listItems, updateItemFields } from '../store/items.ts'
+import {
+  addItemCitations, addItemSource, getItem, insertItem, itemHistory, listItems, updateItemFields,
+} from '../store/items.ts'
 import type { ItemWithSources } from '../store/items.ts'
 import {
   createProject, dropProject, getProject, listProjects, projectCards, updateProjectFields,
 } from '../store/projects.ts'
-import { finishRun, getRun, listRuns, startRun } from '../store/runs.ts'
+import {
+  appendRunEvent, finishRun, getRun, listRunEvents, listRuns, startRun,
+} from '../store/runs.ts'
 import { insertFocusSession, listFocusSessions } from '../store/focus.ts'
+import { clearNowCache, getNowCache, setNowCache } from '../store/now-cache.ts'
 import { extract } from '../pipeline/extract.ts'
 import { mapStructured } from '../pipeline/map-structured.ts'
-import { dedupe } from '../pipeline/dedupe.ts'
+import { buildContext } from '../context/build.ts'
+import { callJson } from '../llm/client.ts'
+import { runAgentLoop, type AgentLoopEvent } from '../agent/loop.ts'
 
 /**
  * 冻结的路由清单。界面和（将来的）手机端都只认这几个口，所以三个人可以各写各的，
@@ -44,9 +52,49 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
   type SseClient = { write: (data: string) => void }
   const sseClients = new Set<SseClient>()
   function broadcastChanged(at: string): void {
+    // 库有写入 = 「此刻」缓存失效。现在缓存单行，直接删；将来有增量再改成版本号。
+    clearNowCache(db)
     const data = JSON.stringify({ type: 'changed', at })
     for (const client of sseClients) {
       try { client.write(data) } catch { sseClients.delete(client) }
+    }
+  }
+
+  // ── 单次投放的进行中事件流 ───────────────────────────────────────────
+  // 工具调用先落库再推：客户端中途连上也能回放完整过程。只带工具名与参数，
+  // 不带工具结果——碎片原文不进渲染进程，气泡用不到。
+  type RunStreamState = { clients: Set<SseClient>; finished: Run | null }
+  const runStreams = new Map<string, RunStreamState>()
+
+  function stateFor(runId: string): RunStreamState {
+    let state = runStreams.get(runId)
+    if (!state) {
+      state = { clients: new Set(), finished: null }
+      runStreams.set(runId, state)
+    }
+    return state
+  }
+
+  function emitRunToolCall(runId: string, event: AgentLoopEvent, at: string): void {
+    appendRunEvent(db, runId, event.step, at, event.tool, event.args)
+    const data = JSON.stringify({ type: 'tool_call', at, step: event.step, tool: event.tool, args: event.args })
+    for (const client of stateFor(runId).clients) {
+      try { client.write(data) } catch { stateFor(runId).clients.delete(client) }
+    }
+  }
+
+  function emitRunFinished(runId: string, run: Run): void {
+    const state = stateFor(runId)
+    state.finished = run
+    const data = JSON.stringify({
+      type: 'run_finished',
+      at: run.finishedAt ?? run.startedAt,
+      status: run.status,
+      counts: run.counts,
+      message: run.message,
+    })
+    for (const client of state.clients) {
+      try { client.write(data) } catch { state.clients.delete(client) }
     }
   }
 
@@ -86,9 +134,9 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
   })
 
   /**
-   * 扔一条东西进来：落碎片 → 建 run → 理解 → 去重合并 → 入库 → 广播。
+   * 扔一条东西进来：落碎片 → 建 run → agent 循环 → 入库 → 广播。
    * 零条与失败都是业务常态不是 HTTP 错误：碎片已落库，结果一律记在 run 里，
-   * 界面看 run.status 渲染四种话术。第 5 步循环上线后中间那段整体换掉，外层不动。
+   * 界面看 run.status 渲染四种话术。
    */
   app.post('/api/fragments', async (c) => {
     const ctx = ctxOf()
@@ -102,38 +150,45 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     broadcastChanged(ctx.now)
 
     let items: ItemWithSources[] = []
-    let plans: MergePlan[] = []
     try {
-      const candidates = fragment.rawType === 'structured'
-        ? mapStructured(ctx, fragment)
-        : (await extract(config, ctx, fragment)).items
-
-      const planned = dedupe(ctx, candidates, listItems(db))
-      const itemIds = applyPlans(db, ctx, fragment.id, planned)
-      items = itemIds.map((id) => getItem(db, id) as ItemWithSources)
-      plans = planned.map((p) => p.plan)
-
-      const counts = {
-        created: plans.filter((p) => p.action === 'new').length,
-        updated: plans.filter((p) => p.action !== 'new').length,
-        dropped: 0,
-        needsConfirm: items.filter((i) => i.status === 'needs_confirm').length,
+      if (fragment.rawType === 'structured') {
+        // 结构化来源不经模型，也不走循环；B 的同步路径另有 upsertByExternalId。
+        const candidates = mapStructured(ctx, fragment)
+        const itemIds = candidates.map((e) => {
+          const id = insertItem(db, ctx, e)
+          addItemSource(db, ctx, id, fragment.id)
+          addItemCitations(db, id, fragment.id, e)
+          return id
+        })
+        items = itemIds.map((id) => getItem(db, id) as ItemWithSources)
+        const counts = {
+          created: itemIds.length,
+          updated: 0,
+          dropped: 0,
+          needsConfirm: items.filter((i) => i.status === 'needs_confirm').length,
+        }
+        const message = items.length === 0 ? '没找到需要记的东西。原文已存。' : '接住了。原文已存。'
+        finishRun(db, ctx, run.id, 'done', message, counts)
+        emitRunFinished(run.id, getRun(db, run.id) as Run)
+      } else {
+        const result = await runAgentLoop(config, db, ctx, fragment, (e) => {
+          emitRunToolCall(run.id, e, nowInShanghai())
+        })
+        finishRun(db, ctx, run.id, result.status, result.message, result.counts)
+        emitRunFinished(run.id, getRun(db, run.id) as Run)
+        items = listItems(db).filter((i) => i.sourceFragmentIds.includes(fragment.id))
       }
-      const message = items.length === 0
-        ? '没找到需要记的东西。原文已存。'
-        : counts.needsConfirm > 0
-          ? `接住了，${counts.needsConfirm} 条拿不准的先放待确认。原文已存。`
-          : '接住了。原文已存。'
-      finishRun(db, ctx, run.id, 'done', message, counts)
     } catch (e) {
       const message = isConnectionError(e)
         ? '连不上模型。原文已存。'
         : '没能理解这条。原文已存。'
       finishRun(db, ctx, run.id, 'failed', message, null)
+      emitRunFinished(run.id, getRun(db, run.id) as Run)
     }
     broadcastChanged(ctx.now)
 
-    return c.json({ fragment, run: getRun(db, run.id), items, plans })
+    // plans 字段保留为空数组：循环里没有 MergePlan 这一层，但旧客户端仍会读这个键。
+    return c.json({ fragment, run: getRun(db, run.id), items, plans: [] })
   })
 
   /** 只理解、不落库。调 prompt 时打这个口，不用开界面。 */
@@ -192,18 +247,52 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
 
   // ── 五页取数 ────────────────────────────────────────────────────────
   /**
-   * 「此刻」：第 7 步填实现，形状现在就冻死。C 对着它写页，之后零改动接上。
-   *   primary    主推那件事（null = 库里没有可推的，页面显示投放入口）
-   *   alternates 备选若干件
-   *   energy     energy_reading 那行
-   *   basis      这次输出用了哪些材料（条目 id / 引文）
+   * 「此刻」：一次只读生成。主推 + 备选一次返回，结果落库缓存；
+   * 失效三选一：跨半小时、库有写入（broadcastChanged 已清）、用户按重新想一个。
    */
-  app.get('/api/now', (c) => c.json({
-    primary: null,
-    alternates: [],
-    energy: null,
-    basis: [],
-  }))
+  app.get('/api/now', async (c) => {
+    const ctx = ctxOf()
+    const cached = getNowCache(db)
+    if (cached && !isNowStale(cached.createdAt, ctx.now)) {
+      return c.json(JSON.parse(cached.payload) as unknown)
+    }
+
+    const active = listItems(db).filter(
+      (i) => (i.type === 'event' || i.type === 'task') && i.status === 'active',
+    )
+    if (active.length === 0) return c.json(emptyNow())
+
+    try {
+      const context = buildContext(db, ctx)
+      const raw = await callJson(config.llm.text, {
+        system: readFileSync(join(config.promptsDir, 'now.md'), 'utf8'),
+        user: context.formatted,
+        schemaName: 'now_output',
+        jsonSchema: nowJsonSchema(),
+      })
+      const parsed = NowOutput.safeParse(raw)
+      if (!parsed.success) {
+        throw new Error(`「此刻」输出不符合契约：${JSON.stringify(parsed.error.issues)}`)
+      }
+      const payload = {
+        primary: parsed.data.primary,
+        alternates: parsed.data.alternates,
+        energy: parsed.data.energy_reading || null,
+        basis: parsed.data.basis,
+      }
+      setNowCache(db, ctx, JSON.stringify(payload))
+      return c.json(payload)
+    } catch (e) {
+      console.error('/api/now 生成失败，返回空态', e)
+      return c.json(emptyNow())
+    }
+  })
+
+  /** 用户按「重新想一个」：只清缓存，下一次 GET 重新生成。 */
+  app.post('/api/now/refresh', (c) => {
+    clearNowCache(db)
+    return c.json({ ok: true })
+  })
 
   /** 最近页：每一次投放（碎片）+ 它的 run 回执 + 抽出/更新到的条目。 */
   app.get('/api/recent', (c) => {
@@ -308,33 +397,57 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
   }))
 
   /**
-   * 一次投放的进行中事件。形状见 shared/run.ts 的 RunEvent——第 5 步往里填
-   * tool_call（只带工具名与参数，不带结果），形状不再改。现在循环还没上线：
-   * 已结束的 run 补发一条 run_finished；running 的只发心跳。
+   * 一次投放的进行中事件。先回放 run_started 与已落库的 tool_call，再流式推新增；
+   * 结束后补一条 run_finished。形状见 shared/run.ts 的 RunEvent。
    */
   app.get('/api/runs/:id/events', (c) => {
     const run = getRun(db, c.req.param('id'))
     if (!run) return c.json({ error: '没有这次投放' }, 404)
     return streamSSE(c, async (stream) => {
-      // writeSSE 必须 await：handler 一返回流就关，悬空的写会被吞掉。
-      if (run.status === 'running') {
-        await stream.writeSSE({ data: JSON.stringify({ type: 'run_started', at: run.startedAt, runId: run.id }) })
-        try {
-          for (;;) await stream.sleep(30_000)
-        } catch { /* 客户端断开 */ }
+      await stream.writeSSE({ data: JSON.stringify({ type: 'run_started', at: run.startedAt, runId: run.id }) })
+      for (const e of listRunEvents(db, run.id)) {
+        await stream.writeSSE({ data: JSON.stringify({ type: 'tool_call', at: e.at, step: e.step, tool: e.tool, args: e.args }) })
+      }
+
+      if (run.status !== 'running') {
+        await stream.writeSSE({ data: JSON.stringify({
+          type: 'run_finished',
+          at: run.finishedAt ?? run.startedAt,
+          status: run.status,
+          counts: run.counts,
+          message: run.message,
+        }) })
         return
       }
-      await stream.writeSSE({ data: JSON.stringify({
-        type: 'run_finished',
-        at: run.finishedAt ?? run.startedAt,
-        status: run.status,
-        counts: run.counts,
-        message: run.message,
-      }) })
+
+      const state = stateFor(run.id)
+      const client: SseClient = {
+        write: (data) => { void stream.writeSSE({ data }) },
+      }
+      state.clients.add(client)
+      stream.onAbort(() => { state.clients.delete(client) })
+      try {
+        for (;;) {
+          await stream.sleep(500)
+          const cur = runStreams.get(run.id)
+          if (!cur || cur.finished) return
+        }
+      } finally {
+        state.clients.delete(client)
+        if (state.clients.size === 0) runStreams.delete(run.id)
+      }
     })
   })
 
   return app
+}
+
+function emptyNow() {
+  return { primary: null, alternates: [], energy: null, basis: [] }
+}
+
+function isNowStale(createdAt: string, now: string): boolean {
+  return new Date(now).getTime() - new Date(createdAt).getTime() > 30 * 60_000
 }
 
 function isConnectionError(e: unknown): boolean {
