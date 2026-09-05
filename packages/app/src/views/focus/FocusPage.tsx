@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -6,6 +6,7 @@ import { nowInShanghai } from '@flowpal/shared'
 import { api, queryKeys } from '../../api.ts'
 import { transition } from '../../tokens/motion.ts'
 import { Pebble } from '../../pebble/Pebble.tsx'
+import type { Mood } from '../../pebble/shader.ts'
 import { ErrorState } from '../../shell/State.tsx'
 import { Composer } from '../now/Composer.tsx'
 import './focus.css'
@@ -20,7 +21,13 @@ import './focus.css'
  *
  * 时长与目标只活在内存里，时段结束才写库。中途刷新页面会丢掉这一段。
  */
-const DURATIONS = [15, 25, 45]
+/*
+ * 五分钟起：梯子能把一件事切到二十秒，最短还要十五分钟的话，门槛等于又抬回去了。
+ * 九十分钟封顶：那是这个项目采用的超日节律先验的长度，不是随手取的整数。
+ */
+const MIN_MINUTES = 5
+const MAX_MINUTES = 90
+const STEP_MINUTES = 5
 const DEFAULT_MINUTES = 25
 
 /** 从「此刻」带过来的目标。带的是当时屏幕上那一步，不是第一步——按过「更小的一步」就该算数 */
@@ -40,7 +47,7 @@ export function FocusPage() {
 
   return (
     <div className="focus">
-      <Pebble size={112} mood={phase.name === 'running' ? 'focus' : 'calm'} />
+      <Pebble size={112} mood={moodOf(phase.name, minutes)} />
 
       {/*
         这一段是关于那件事的，不是关于那一步的。那一步的职责是把开始的门槛降下来，
@@ -53,18 +60,7 @@ export function FocusPage() {
       <AnimatePresence mode="wait" initial={false}>
         {phase.name === 'ready' && (
           <Panel key="ready">
-            <p className="focus-label">打算做多久</p>
-            <div className="focus-choices">
-              {DURATIONS.map((m) => (
-                <button
-                  key={m}
-                  className={m === minutes ? 'focus-choice picked' : 'focus-choice'}
-                  onClick={() => setMinutes(m)}
-                >
-                  {m} 分钟
-                </button>
-              ))}
-            </div>
+            <Dial minutes={minutes} onChange={setMinutes} />
             <button
               className="primary focus-go"
               onClick={() => setPhase({
@@ -121,6 +117,53 @@ export function FocusPage() {
       )}
     </div>
   )
+}
+
+/**
+ * 时长。一条连续的轨，不是几个格子——梯子能把一件事切到二十秒，也可以是一下午，
+ * 中间没有理由只留三个停靠点。
+ *
+ * 颜色沿着轨走：同一个强调色，从最淡到最实。它说的是这一段有多重，不是「长的更好」。
+ * 五分钟那一头照样是被认可的选择——这个产品的整件事就是让开始变容易。
+ */
+function Dial({ minutes, onChange }: { minutes: number; onChange: (m: number) => void }) {
+  // 0 到 1 的位置。宽度与颜色都从它算，两者才不会各走各的
+  const at = (minutes - MIN_MINUTES) / (MAX_MINUTES - MIN_MINUTES)
+  return (
+    <div className="dial" style={{ '--dial-at': at } as CSSProperties}>
+      {/*
+        这个数字站的位置，就是待会儿倒计时出现的位置。按下「开始」之后它留在原地
+        开始走——设定和计时是同一个数，不该在屏幕上换个地方重新登场。
+      */}
+      <p className="dial-value">
+        {minutes}<span className="dial-unit">分钟</span>
+      </p>
+      <input
+        className="dial-range"
+        type="range"
+        min={MIN_MINUTES}
+        max={MAX_MINUTES}
+        step={STEP_MINUTES}
+        value={minutes}
+        aria-label="这一段做多久"
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </div>
+  )
+}
+
+/**
+ * 时长与表情联动。越长越沉：五分钟是笑的，一小时是眯着眼的。
+ *
+ * 短的那一头必须是正面的表情。它是门槛最低的那个选择，产品在这里皱一下眉，
+ * 就等于在劝人选长的——而劝人正是这个产品说好不做的事。
+ */
+function moodOf(phase: Phase['name'], minutes: number): Mood {
+  if (phase === 'running') return 'focus'
+  if (phase === 'ending') return 'calm'
+  if (minutes <= 10) return 'happy'
+  if (minutes <= 35) return 'calm'
+  return 'focus'
 }
 
 /** 直接开 /focus 而不是从「此刻」进来。这时它不是一个模式，只是一条走空了的路 */

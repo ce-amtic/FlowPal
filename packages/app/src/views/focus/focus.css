@@ -43,32 +43,99 @@
   margin-top: var(--space-10);
 }
 
-.focus-label {
-  margin: 0 0 var(--space-2);
-  color: var(--fg-faint);
-  font-size: var(--text-aux);
-}
+/* ── 时长 ─────────────────────────────────────────────── */
 
-.focus-choices {
+/*
+ * 颜色沿着轨走：同一个强调色，从最淡走到最实。不引入第二个色系——那会让这一屏
+ * 看起来是别的产品做的。
+ *
+ * 最淡的一头也保留三成强调色：纯灰的数字在五分钟那一端会读不清，而那一端恰恰
+ * 是最该被读清的选择。
+ */
+.dial {
+  /* 长宽比要一眼是「一条可以拨的量」，不能是一个开关。九比一左右 */
+  --dial-h: 44px;
+  --dial-hue: color-mix(
+    in oklab,
+    var(--accent) calc(30% + 70% * var(--dial-at)),
+    var(--fg-faint)
+  );
   display: flex;
-  gap: var(--space-2);
+  flex-direction: column;
+  align-items: center;
+  /*
+   * 定宽而不是 min(400px, 100%)：外面那一列是按内容收缩的，百分比在里面解不出来，
+   * 结果整条只有内容那么宽。
+   */
+  width: 400px;
+  max-width: 100%;
 }
 
-.focus-choice {
-  border: 0;
-  border-radius: var(--radius-pill);
-  padding: var(--space-2) var(--space-4);
-  background: var(--field);
+.dial-value {
+  margin: 0 0 var(--space-4);
+  color: var(--dial-hue);
+  font-size: var(--text-clock);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.dial-unit {
+  margin-left: var(--space-2);
   color: var(--fg-dim);
-  font: inherit;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  font-size: var(--text-lead);
 }
 
-.focus-choice:hover { color: var(--fg); }
-.focus-choice.picked { background: var(--accent-soft); color: var(--accent); }
+/*
+ * 没有滑块。整条就是一块可以拨的东西，走过的那一段本身就是位置——一颗小圆点
+ * 骑在细线上是「设置项」的样子，这一屏不是在设置什么，是在拨一个量。
+ *
+ * 抓住时整条微微长高，这是唯一的反馈，也是它唯一需要的反馈。
+ */
+.dial-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: var(--dial-h);
+  border-radius: var(--radius-pill);
+  background: none;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease);
+}
 
-.focus-go { margin-top: var(--space-5); }
+.dial-range:active { transform: scaleY(1.08); }
+
+.dial-range:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.dial-range::-webkit-slider-runnable-track {
+  height: var(--dial-h);
+  border-radius: var(--radius-pill);
+  background-color: var(--field);
+  /* 走过的那一段把渐变露出来，越拨越实 */
+  background-image: linear-gradient(
+    to right,
+    color-mix(in oklab, var(--accent) 30%, var(--fg-faint)),
+    var(--accent)
+  );
+  /*
+   * 最短的那一档也留一个满高的圆头。一条空轨读起来像什么都没选，而五分钟
+   * 是实实在在的一个选择。
+   */
+  background-size: calc(var(--dial-h) + (100% - var(--dial-h)) * var(--dial-at)) 100%;
+  background-repeat: no-repeat;
+}
+
+/* 滑块留 1px 且不可见：拖动要有东西可抓，但看得见的只有那一段渐变 */
+.dial-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1px;
+  height: var(--dial-h);
+  opacity: 0;
+}
+
+.focus-go { margin-top: var(--space-6); }
 
 /*
  * 时钟。等宽数字，否则每一秒整行都在轻微地左右挪，那正是这一屏最不该有的动静。
