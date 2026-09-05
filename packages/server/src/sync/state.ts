@@ -22,12 +22,49 @@ export type SyncStatus = {
   signedInAt: string | null
 }
 
+/**
+ * 一路来源这一轮的结果。
+ *
+ * **`idle` 与 `failed` 必须分开。** 邮件没配、通知配额设成 0、第一次同步只记水位
+ * ——这些都是「这一路这次没做事」，是正常状态；登录过期、接口变了才是失败。
+ * 用同一个字段表示两者的话，第一次同步就会把整轮报成失败，而它其实一切正常。
+ */
 export type SyncSourceResult = {
   label: string
   created: number
   updated: number
-  /** 这一路没做成时的原因。做成了为 null */
-  skipped: string | null
+  state: 'ok' | 'idle' | 'failed'
+  /** 非 ok 时的那一句话。ok 时为 null */
+  note: string | null
+}
+
+export function ok(label: string, created: number, updated: number): SyncSourceResult {
+  return { label, created, updated, state: 'ok', note: null }
+}
+
+export function idle(label: string, note: string): SyncSourceResult {
+  return { label, created: 0, updated: 0, state: 'idle', note }
+}
+
+export function failed(label: string, note: string): SyncSourceResult {
+  return { label, created: 0, updated: 0, state: 'failed', note }
+}
+
+/**
+ * 一轮的总状态与那一句话。
+ *
+ * 只有 `failed` 才算这一轮失败——第一次同步里通知那一路只记水位、邮件根本没配，
+ * 两者都是 `idle`，而它们本不该让用户在设置页上看到「同步失败」。
+ *
+ * 坏了的时候报第一条的原因而不是「有 1 路失败」：用户要的是下一步该动哪儿。
+ */
+export function summarize(sources: SyncSourceResult[]): { state: 'ok' | 'error'; message: string } {
+  const broken = sources.filter((s) => s.state === 'failed')
+  if (broken.length > 0) return { state: 'error', message: broken[0]!.note! }
+
+  const created = sources.reduce((n, s) => n + s.created, 0)
+  const updated = sources.reduce((n, s) => n + s.updated, 0)
+  return { state: 'ok', message: `新增 ${created} 条 · 更新 ${updated} 条` }
 }
 
 const KEY = {

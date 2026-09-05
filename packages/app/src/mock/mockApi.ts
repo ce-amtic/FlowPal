@@ -79,9 +79,9 @@ export const mockApi: Api = {
     at: SETTLED_LONG_AGO,
     message: '新增 0 条 · 更新 24 条',
     sources: [
-      { label: '课表与校历', created: 0, updated: 24, skipped: null },
-      { label: '通知公告', created: 0, updated: 0, skipped: null },
-      { label: '邮件', created: 0, updated: 0, skipped: '未配置' },
+      { label: '课表与校历', created: 0, updated: 24, state: 'ok' as const, note: null },
+      { label: '通知公告', created: 1, updated: 0, state: 'ok' as const, note: null },
+      { label: '邮件', created: 0, updated: 0, state: 'idle' as const, note: '未配置' },
     ],
     signedIn: true,
     signedInAt: SETTLED_LONG_AGO,

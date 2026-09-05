@@ -13,8 +13,9 @@ import { fetchNoticeBody, fetchNotices, fetchSchedule, parseSchedule, probePorta
 import { mapPortalSchedule } from './map.ts'
 import { fetchMail, describeMailbox } from './mail.ts'
 import {
-  lastScheduleFragment, mailWatermark, noticeWatermark, rememberScheduleFragment,
-  setMailWatermark, setNoticeWatermark, writeSyncStatus, type SyncSourceResult,
+  failed, idle, lastScheduleFragment, mailWatermark, noticeWatermark, ok,
+  rememberScheduleFragment, setMailWatermark, setNoticeWatermark, summarize,
+  writeSyncStatus, type SyncSourceResult,
 } from './state.ts'
 
 export { RucCookies } from './cookies.ts'
@@ -57,9 +58,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
   const { db, ctx, cookies } = deps
 
   if (cookies.isEmpty) {
-    const sources: SyncSourceResult[] = [
-      { label: '人大门户', created: 0, updated: 0, skipped: '还没有登录' },
-    ]
+    const sources = [idle(PORTAL, '还没有登录')]
     writeSyncStatus(db, ctx, 'expired', '还没有登录人大门户', sources)
     return { state: 'expired', message: '还没有登录人大门户', sources }
   }
@@ -78,34 +77,25 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     sources.push(await syncNotices(deps, http))
     deps.onChanged()
   } catch (e) {
-    if (e instanceof SessionExpired) {
-      const message = '需要重新登录人大门户'
-      sources.push({ label: '人大门户', created: 0, updated: 0, skipped: message })
-      const withMail = [...sources, await syncMail(deps)]
-      writeSyncStatus(db, ctx, 'expired', message, withMail)
-      deps.onChanged()
-      return { state: 'expired', message, sources: withMail }
-    }
-    const message = e instanceof Error ? e.message : String(e)
-    sources.push({ label: '人大门户', created: 0, updated: 0, skipped: message })
-    writeSyncStatus(db, ctx, 'error', message, sources)
+    // 门户这一路整个停了，但邮件跟它没关系，照跑——一处坏了不该把另一处也关掉。
+    const expired = e instanceof SessionExpired
+    const message = expired ? '需要重新登录人大门户' : e instanceof Error ? e.message : String(e)
+    sources.push(failed(PORTAL, message))
+    const withMail = [...sources, await syncMail(deps)]
+    writeSyncStatus(db, ctx, expired ? 'expired' : 'error', message, withMail)
     deps.onChanged()
-    return { state: 'error', message, sources }
+    return { state: expired ? 'expired' : 'error', message, sources: withMail }
   }
 
   sources.push(await syncMail(deps))
   deps.onChanged()
 
-  const failed = sources.filter((s) => s.skipped !== null && s.skipped !== '未配置')
-  const created = sources.reduce((n, s) => n + s.created, 0)
-  const updated = sources.reduce((n, s) => n + s.updated, 0)
-  const message = failed.length > 0
-    ? failed[0]!.skipped!
-    : `新增 ${created} 条 · 更新 ${updated} 条`
-
-  writeSyncStatus(db, ctx, failed.length > 0 ? 'error' : 'ok', message, sources)
-  return { state: failed.length > 0 ? 'error' : 'ok', message, sources }
+  const { state, message } = summarize(sources)
+  writeSyncStatus(db, ctx, state, message, sources)
+  return { state, message, sources }
 }
+
+const PORTAL = '人大门户'
 
 // ── 日程中心：课表、校历、我的日历 ────────────────────────────────────
 
@@ -151,8 +141,10 @@ async function syncSchedule(deps: SyncDeps, http: RucHttp): Promise<SyncSourceRe
 
   const events = weeks.flatMap((week) => parseSchedule((week as { body: unknown }).body))
   const { created, updated } = applyMapped(db, ctx, fragmentId, mapPortalSchedule(ctx, events))
-  return { label: '课表与校历', created, updated, skipped: null }
+  return ok('课表与校历', created, updated)
 }
+
+const NOTICES = '通知公告'
 
 // ── 通知公告 ──────────────────────────────────────────────────────────
 
@@ -167,11 +159,11 @@ async function syncSchedule(deps: SyncDeps, http: RucHttp): Promise<SyncSourceRe
 async function syncNotices(deps: SyncDeps, http: RucHttp): Promise<SyncSourceResult> {
   const { db, ctx, config } = deps
   const quota = config.sync.noticesPerRun
-  if (quota === 0) return { label: '通知公告', created: 0, updated: 0, skipped: '未开启' }
+  if (quota === 0) return idle(NOTICES, '未开启')
 
   const notices = await fetchNotices(http, Math.max(quota * 4, 20))
   deps.cookies.save()
-  if (notices.length === 0) return { label: '通知公告', created: 0, updated: 0, skipped: null }
+  if (notices.length === 0) return ok(NOTICES, 0, 0)
 
   const watermark = noticeWatermark(db)
   const newest = notices.reduce((max, n) => (n.publishedAt > max ? n.publishedAt : max), '')
@@ -180,7 +172,7 @@ async function syncNotices(deps: SyncDeps, http: RucHttp): Promise<SyncSourceRes
     // 第一次同步不倒灌历史：门户上躺着几百条旧通知，把它们全跑一遍既不是用户要的，
     // 也会在第一天就烧掉大半额度。从现在这条水位往后看。
     setNoticeWatermark(db, ctx, newest)
-    return { label: '通知公告', created: 0, updated: 0, skipped: '已记下当前进度，从下次起处理新通知' }
+    return idle(NOTICES, '已记下当前进度，从下次起处理新通知')
   }
 
   const fresh = notices
@@ -202,16 +194,15 @@ async function syncNotices(deps: SyncDeps, http: RucHttp): Promise<SyncSourceRes
   }
   deps.cookies.save()
 
-  return { label: '通知公告', created, updated: 0, skipped: null }
+  return ok(NOTICES, created, 0)
 }
 
 // ── 邮件 ──────────────────────────────────────────────────────────────
 
 async function syncMail(deps: SyncDeps): Promise<SyncSourceResult> {
   const { config } = deps
-  if (config.mail === null) {
-    return { label: describeMailbox(null), created: 0, updated: 0, skipped: '未配置' }
-  }
+  if (config.mail === null) return idle(describeMailbox(null), '未配置')
+
   const label = describeMailbox(config.mail)
   try {
     const messages = await fetchMail(config.mail, mailWatermark(deps.db))
@@ -220,9 +211,11 @@ async function syncMail(deps: SyncDeps): Promise<SyncSourceResult> {
       created += await runThroughLoop(deps, 'email', message.text)
       setMailWatermark(deps.db, deps.ctx, message.uid)
     }
-    return { label, created, updated: 0, skipped: null }
+    return ok(label, created, 0)
   } catch (e) {
-    return { label, created: 0, updated: 0, skipped: e instanceof Error ? e.message : String(e) }
+    // 这一层拥有邮箱这条路的错误。连不上、授权码不对、邮箱协议变了——三种都要
+    // 原样报到设置页上，因为它们的下一步各不相同，而门户那一路照跑不受影响。
+    return failed(label, e instanceof Error ? e.message : String(e))
   }
 }
 

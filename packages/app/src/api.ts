@@ -133,12 +133,19 @@ export type NewFocusSession = {
  * **失败不重试，所以失败必须有个看得见的落点**，就是这里。设置页把它显示成
  * 「上次同步 09:12 · 需要重新登录」。桌宠不为后台同步失败弹东西。
  */
+/**
+ * 一路来源这一轮的结果。
+ *
+ * `idle` 与 `failed` 是两件事：邮件没配、第一次同步只记水位，都是正常状态；
+ * 登录过期、接口变了才是失败。合成一个的话，第一次同步会被报成失败。
+ */
 export type SyncSourceResult = {
   label: string
   created: number
   updated: number
-  /** 这一路没做成时的原因。做成了为 null */
-  skipped: string | null
+  state: 'ok' | 'idle' | 'failed'
+  /** 非 ok 时的那一句话 */
+  note: string | null
 }
 
 export type SyncStatus = {

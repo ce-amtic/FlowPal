@@ -148,8 +148,9 @@ function SyncSection() {
               {data.sources.map((source) => (
                 <li key={source.label}>
                   <span>{source.label}</span>
-                  <span className={source.skipped === null ? '' : 'settings-source-idle'}>
-                    {source.skipped ?? `新增 ${source.created} · 更新 ${source.updated}`}
+                  {/* 没开的那一路弱化，坏了的那一路不弱化——一个不用管，一个要管 */}
+                  <span className={source.state === 'idle' ? 'settings-source-idle' : ''}>
+                    {source.note ?? `新增 ${source.created} · 更新 ${source.updated}`}
                   </span>
                 </li>
               ))}

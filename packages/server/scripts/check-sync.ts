@@ -10,6 +10,7 @@ import { mapStructured } from '../src/pipeline/map-structured.ts'
 import { applyMapped } from '../src/sync/apply.ts'
 import { parseNotices, parseSchedule } from '../src/sync/portal.ts'
 import { mapPortalSchedule } from '../src/sync/map.ts'
+import { failed, idle, ok, summarize } from '../src/sync/state.ts'
 
 /**
  * 同步这条路的硬断言。**不联网、不用凭据、不调模型**，所以它天天可跑。
@@ -221,6 +222,27 @@ try {
   silentlyEmpty = true
 }
 assert(silentlyEmpty, 'resultCode 非 0 时抛出，不当成「今天没有通知」')
+
+// ── 一轮的总状态 ──────────────────────────────────────────────────────
+
+console.log('\n同步状态')
+
+assert(
+  summarize([
+    ok('课表与校历', 30, 0),
+    idle('通知公告', '已记下当前进度，从下次起处理新通知'),
+    idle('邮件', '未配置'),
+  ]).state === 'ok',
+  '第一次同步：通知只记水位、邮件没配，整轮仍然是成功',
+)
+assert(
+  summarize([ok('课表与校历', 0, 30), failed('邮件（x@ruc.edu.cn）', '认证失败')]).message === '认证失败',
+  '有一路坏了就报那一路的原因，而不是「有 1 路失败」',
+)
+assert(
+  summarize([ok('课表与校历', 2, 30), ok('通知公告', 1, 0)]).message === '新增 3 条 · 更新 30 条',
+  '都成功时报新增与更新的条数',
+)
 
 // ── 落库 ──────────────────────────────────────────────────────────────
 
