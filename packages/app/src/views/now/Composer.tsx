@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import { api } from '../../api.ts'
 import { transition } from '../../tokens/motion.ts'
+
+type RecordMutation = UseMutationResult<Awaited<ReturnType<typeof api.throwIn>>, Error, string>
 
 /**
  * 主窗口里的记录口。四个采集入口里归主窗口的那一个，另外三个（全局快捷键、
@@ -29,15 +32,6 @@ export function Composer({ autoFocus, floating, onHeight }: {
 
   useEffect(() => { if (autoFocus) box.current?.focus() }, [autoFocus])
 
-  useEffect(() => {
-    const el = form.current
-    if (!el) throw new Error('记录框没挂上，量不到高度')
-    if (!floating) { onHeight(0); return }
-    const observer = new ResizeObserver(() => onHeight(el.offsetHeight))
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [floating, onHeight])
-
   const record = useMutation({
     mutationFn: (rawText: string) =>
       api.throwIn({ source: 'paste', rawType: 'text', rawText }),
@@ -46,6 +40,15 @@ export function Composer({ autoFocus, floating, onHeight }: {
       queryClient.invalidateQueries()
     },
   })
+
+  useEffect(() => {
+    const el = form.current
+    if (!el) throw new Error('记录框没挂上，量不到高度')
+    if (!floating) { onHeight(0); return }
+    const observer = new ResizeObserver(() => onHeight(el.offsetHeight))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [floating, onHeight])
 
   const submit = () => {
     const trimmed = text.trim()
@@ -58,13 +61,31 @@ export function Composer({ autoFocus, floating, onHeight }: {
       className={floating ? 'composer composer-floating' : 'composer'}
       onSubmit={(e) => { e.preventDefault(); submit() }}
     >
+      <AnimatePresence initial={false}>
+        {(record.isPending || record.data || record.error) && (
+          <motion.div
+            className="receipt"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={transition.base}
+          >
+            <Receipt record={record} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <textarea
         ref={box}
         className="composer-box"
         rows={1}
         value={text}
         placeholder="输入或粘贴"
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value)
+          // 开始写下一条，上一条的回执就该让位。它不堆积，屏幕上永远只有最新那一条
+          if (record.data || record.error) record.reset()
+        }}
         onKeyDown={(e) => {
           // 回车就记。换行要按 Shift——这个框是用来接住东西的，不是用来写作的
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
@@ -72,39 +93,6 @@ export function Composer({ autoFocus, floating, onHeight }: {
       />
 
       <div className="composer-foot">
-        {/*
-          回执原地一行，不堆积。堆积就成了对话流，而这一页的正文永远是那一件事，
-          不是你和它说过的话。要看抽出了什么，去「最近」。
-        */}
-        <AnimatePresence mode="wait" initial={false}>
-          {record.isPending && (
-            <motion.span
-              key="pending" className="composer-note"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              transition={transition.fast}
-            >
-              正在理解
-            </motion.span>
-          )}
-          {!record.isPending && record.error && (
-            <motion.span
-              key="error" className="composer-note composer-failed"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              transition={transition.fast}
-            >
-              {record.error instanceof Error ? record.error.message : '记录失败'}
-            </motion.span>
-          )}
-          {/* run.message 可以为空，那就没有回执可显示——不编一句顶上 */}
-          {!record.isPending && !record.error && record.data?.run.message && (
-            <Receipt
-              key="done"
-              text={record.data.run.message}
-              onGone={() => record.reset()}
-            />
-          )}
-        </AnimatePresence>
-
         <button
           className="primary composer-send"
           disabled={text.trim().length === 0 || record.isPending}
@@ -116,20 +104,56 @@ export function Composer({ autoFocus, floating, onHeight }: {
   )
 }
 
-/** 回执自己消失。留在屏幕上就变成了一条越积越多的记录，那是「最近」的活 */
-function Receipt({ text, onGone }: { text: string; onGone: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onGone, 4000)
-    return () => clearTimeout(timer)
-  }, [onGone])
+/**
+ * 回执。它不再是一行几秒后消失的小字——那等于没有反馈：抽出来的条目散进日程与
+ * 项目，人在这一页上什么都看不到，投进去就像没了。
+ *
+ * 所以这里播的是「变成了什么」：那句回执，加上抽出的条目本身，点得开。
+ * 它只显示最近一次，写下一条时让位，所以这里不会长成一条对话流。
+ */
+function Receipt({ record }: { record: RecordMutation }) {
+  if (record.isPending) {
+    return (
+      <p className="receipt-line receipt-working">
+        正在理解<Dots />
+      </p>
+    )
+  }
+
+  if (record.error) {
+    return (
+      <p className="receipt-line receipt-failed">
+        {record.error instanceof Error ? record.error.message : '记录失败'}
+      </p>
+    )
+  }
+
+  if (!record.data) return null
+  const { run, items } = record.data
 
   return (
-    <motion.span
-      className="composer-note"
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      transition={transition.fast}
-    >
-      {text}
-    </motion.span>
+    <>
+      {/* 四种收场各有各的说法，都由服务端给——同一件事在这里和「最近」上必须同一句 */}
+      {run.message && <p className="receipt-line">{run.message}</p>}
+      {items.length > 0 && (
+        <ul className="receipt-items">
+          {items.map((item) => (
+            <li key={item.id}>
+              <Link to={`/items/${item.id}`}>{item.title}</Link>
+              {item.status === 'needs_confirm' && <span className="receipt-tag">待确认</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+/** 三个点。等待要几秒，一行不动的字看起来像卡住了 */
+function Dots() {
+  return (
+    <span className="dots" aria-hidden>
+      <i /><i /><i />
+    </span>
   )
 }
