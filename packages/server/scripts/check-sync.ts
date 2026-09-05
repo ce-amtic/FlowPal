@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CalendarSchema, createCtx, occursOn, supportsRrule } from '@flowpal/shared'
@@ -11,6 +12,7 @@ import { applyMapped } from '../src/sync/apply.ts'
 import { parseNotices, parseSchedule } from '../src/sync/portal.ts'
 import { mapPortalSchedule } from '../src/sync/map.ts'
 import { failed, idle, ok, summarize } from '../src/sync/state.ts'
+import { RucCookies } from '../src/sync/cookies.ts'
 
 /**
  * 同步这条路的硬断言。**不联网、不用凭据、不调模型**，所以它天天可跑。
@@ -161,6 +163,60 @@ assert(
   '每条引用逐字出现在拉回来的原文里',
   mapped.flatMap((m) => m.item.citations.filter((c) => !rawText.includes(c.quote)).map((c) => c.quote)).join(' / '),
 )
+
+// ── 登录态的搬运 ──────────────────────────────────────────────────────
+
+console.log('\n登录态')
+
+{
+  /*
+   * 判断依据是 RFC 6265 的域与路径匹配，不是我们的实现：`.ruc.edu.cn` 这种带前导点
+   * 的要对所有子域生效，挂在 `/cas` 下的只对那条路径下的请求发出。
+   *
+   * 这一段值得单验，因为它错了的样子最难认：登录窗口一切正常、界面说「已登录」，
+   * 而每个请求都停在登录页。
+   */
+  const jarPath = join(tmpdir(), `flowpal-check-cookies-${process.pid}.json`)
+  const jar = RucCookies.open(jarPath)
+  assert(jar.isEmpty, '没登录过的罐子是空的')
+
+  const saved = jar.importFromBrowser([
+    { name: 'CASTGC', value: 'tgt-1', domain: 'cas.ruc.edu.cn', path: '/cas', secure: true, httpOnly: true },
+    { name: 'shared', value: 's-1', domain: '.ruc.edu.cn', path: '/', secure: true, httpOnly: false },
+    { name: 'SESSION', value: 'p-1', domain: 'my.ruc.edu.cn', path: '/', secure: true, httpOnly: true },
+  ])
+  assert(saved === 3, '存进去几条就报几条，不是循环跑了几次', `实得 ${saved}`)
+
+  const atCas = jar.header('https://cas.ruc.edu.cn/cas/login')
+  const atPortal = jar.header('https://my.ruc.edu.cn/sopplus/')
+  assert(
+    atCas.includes('CASTGC=') && atCas.includes('shared='),
+    '票据授予 Cookie 与全域的那条一起发往 CAS——少了 CASTGC 就换不到票',
+    atCas,
+  )
+  assert(!atCas.includes('SESSION='), '门户自己的会话不发给 CAS')
+  assert(
+    atPortal.includes('SESSION=') && atPortal.includes('shared=') && !atPortal.includes('CASTGC='),
+    '挂在 /cas 下的那条不发往门户',
+    atPortal,
+  )
+
+  // 这批数据是我们自己按每条 Cookie 的属性组出来的，罐子拒收只能说明我们组错了。
+  // 吞掉的话，一次「登录成功、存了 12 条」之后紧接着一次「需要重新登录」。
+  let loud = false
+  try {
+    jar.importFromBrowser([
+      { name: 'bad', value: 'x', domain: '', path: '/', secure: true, httpOnly: false },
+    ])
+  } catch {
+    loud = true
+  }
+  assert(loud, '存不下的 Cookie 抛出，不吞——吞了就是一次假的「登录成功」')
+
+  jar.clear()
+  assert(jar.isEmpty, '退出登录之后罐子是空的')
+  rmSync(jarPath, { force: true })
+}
 
 // ── 重复项落在哪几天 ──────────────────────────────────────────────────
 

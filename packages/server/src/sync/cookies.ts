@@ -27,19 +27,26 @@ export class RucCookies {
 
   /** 有没有登录过。空罐子和「登录过但过期了」是两回事，界面上说的话不一样。 */
   get isEmpty(): boolean {
-    return this.jar.serializeSync()?.cookies.length === 0
+    return this.count === 0
   }
 
   header(url: string): string {
     return this.jar.getCookieStringSync(url)
   }
 
-  /** 服务端下发的 Set-Cookie。逐跳跟随时每一跳都要过这里，SSO 的会话就是在跳转里签发的。 */
+  /**
+   * 服务端下发的 Set-Cookie。逐跳跟随时每一跳都要过这里，SSO 的会话就是在跳转里
+   * 签发的。
+   *
+   * **这里是全模块唯一一处「收不下就算了」，理由是这批数据不归我们管**：属性畸形
+   * 或作用域对不上的 Set-Cookie 是服务端发的，我们改不了，而为其中一条中断整轮
+   * 同步换不来任何东西。丢了要紧的那条也不会静悄悄地错——下一个请求会停在登录页，
+   * 由失效判据大声说出来。下面 importFromBrowser 里就不是这样：那批数据是我们
+   * 自己组的，收不下说明我们组错了。
+   */
   absorb(url: string, setCookies: string[]): void {
     for (const raw of setCookies) {
       const cookie = Cookie.parse(raw)
-      // 解析不了的 Set-Cookie 直接忽略：这不是我们能修的东西，而且丢一条属性畸形的
-      // Cookie 不会静悄悄地错——真的缺了它，下一个请求会响亮地停在登录页。
       if (cookie) this.jar.setCookieSync(cookie, url, { ignoreError: true })
     }
   }
@@ -51,28 +58,47 @@ export class RucCookies {
    * 写死在根上（Android 的 CookieManager 只给裸键值对），并因此踩过同名 Cookie
    * 两份并存、服务端读到陈的那一份的坑。Electron 的 cookies API 给的是完整属性，
    * 没有那个约束，所以这里照原样存——同名不同作用域的 Cookie 本来就该各存各的。
+   *
+   * **收不下就抛，不吞。** 这批数据是我们自己按每条 Cookie 的属性组出来的，
+   * 罐子拒收只能说明我们组错了。吞掉的话，一次「登录成功、存了 12 条」之后紧接着
+   * 一次「需要重新登录」，而那 12 条里到底进去几条无从知道。
+   *
+   * 返回的是罐子里真的多出来几条，不是循环跑了几次——这两个数不一样时，是前者
+   * 有意义。
    */
   importFromBrowser(cookies: BrowserCookie[]): number {
-    let saved = 0
+    const before = this.count
+
     for (const c of cookies) {
       // Electron 用前导点表示「含子域」，tough-cookie 用 hostOnly=false 表达同一件事。
       const host = c.domain.replace(/^\./, '')
+      const path = c.path === '' ? '/' : c.path
       const cookie = new Cookie({
         key: c.name,
         value: c.value,
         domain: host,
-        path: c.path || '/',
+        path,
         secure: c.secure,
         httpOnly: c.httpOnly,
         hostOnly: !c.domain.startsWith('.'),
-        expires: c.expirationDate ? new Date(c.expirationDate * 1000) : 'Infinity',
+        expires: c.expirationDate === undefined ? 'Infinity' : new Date(c.expirationDate * 1000),
       })
-      const url = `${c.secure ? 'https' : 'http'}://${host}${c.path || '/'}`
-      this.jar.setCookieSync(cookie, url, { ignoreError: true })
-      saved += 1
+      try {
+        this.jar.setCookieSync(cookie, `${c.secure ? 'https' : 'http'}://${host}${path}`)
+      } catch (e) {
+        // 只报名字与作用域，不报值——值就是登录态本身。
+        throw new Error(
+          `登录态里的 ${c.name}（${c.domain}${path}）存不进去：${e instanceof Error ? e.message : e}`,
+        )
+      }
     }
+
     this.save()
-    return saved
+    return this.count - before
+  }
+
+  private get count(): number {
+    return this.jar.serializeSync()?.cookies.length ?? 0
   }
 
   save(): void {

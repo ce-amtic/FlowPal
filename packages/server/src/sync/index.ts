@@ -234,9 +234,12 @@ async function runThroughLoop(
   const { db, ctx, config } = deps
   const fragment = insertFragment(db, ctx, { source, rawType: 'text', rawText })
   const run = startRun(db, ctx, fragment.id)
+  // 一条处理完就广播一次，不等整批。一条要跑几十秒，攒到最后的话「最近」页上会有
+  // 好几分钟停在「处理中」，看起来像卡住了。
   try {
     const result = await runAgentLoop(config, db, ctx, fragment, () => {})
     finishRun(db, ctx, run.id, result.status, result.message, result.counts)
+    deps.onChanged()
     return result.counts?.created ?? 0
   } catch (e) {
     // 这一层拥有这个错误，别处不再包一次。一条通知读不懂不该把整轮同步带下去：
@@ -244,6 +247,7 @@ async function runThroughLoop(
     // 碎片再跑一次。终端里同时留一行原因，否则「失败」二字查不出是哪一种失败。
     console.error(`同步的一条${source === 'notice' ? '通知' : '邮件'}没能处理：`, e)
     finishRun(db, ctx, run.id, 'failed', '没能理解这条。原文已存。', null)
+    deps.onChanged()
     return 0
   }
 }
