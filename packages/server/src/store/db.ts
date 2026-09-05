@@ -12,7 +12,7 @@ import { SCHEMA } from './schema.ts'
  * schema 版本。表形状变了就 +1——现在库里还没有真实数据，旧形状的库直接拒绝并提示
  * 重建，不做迁移（demo:reset 上线后它就是重建工具）。内存库（':memory:'）供断言用。
  */
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 export function openDb(dataDir: string): DatabaseSync {
   const db = dataDir === ':memory:'

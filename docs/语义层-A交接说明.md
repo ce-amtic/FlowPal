@@ -1,7 +1,7 @@
 # 语义层（A）交接说明
 
 > 写给 B（桌面侧）与 C（主窗口）。2026-09-05，作品冻结（09-06 12:30）之前。
-> 本文只讲「A 已经做了什么、你们会碰到什么」，第 3 步路由扩展做完后会再更新一节。
+> 本文只讲「A 已经做了什么、你们会碰到什么」，已覆盖第 1-3 步。
 
 ## 1. 用的什么 AI、什么接口格式
 
@@ -46,9 +46,35 @@
 - **演示种子** `pnpm demo:reset`：5 项目 / 21 条目 / 12 碎片 / 4 次专注 / 1 条改期历史。日期全部相对执行时刻算（演示当天跑永远成立）；引文在插入前逐字自检。
 - **契约**：`packages/shared` 新增 `Project`、`Item.projectId`、`Item.externalId`；store 导出了 `insertItem / addItemSource / addItemCitations / recordItemHistory` 供种子与同步使用。
 
-## 5. 下一步（第 3 步，路由扩展）预告
+## 5. 已冻结的路由与事件形状（第 3 步完成，2026-09-05）
 
-即将落地并冻结形状：项目增删改查、五页取数（含 /api/now 空形状）、待确认队列、`GET /api/events`（SSE 广播「变了」，不带内容）、`GET /api/runs/:id/events`（先空实现、形状当场冻结）。**做完这一步 C 与 B 不再等 A。**
+**从这节起，C 与 B 不再等 A。** 全部接口已在本机实跑验证过；改任何形状前先在三人群里说。
+
+| 路由 | 形状要点 | 给谁 |
+|---|---|---|
+| `GET /api/items`、`GET/PATCH /api/items/:id` | 条目清单（不含 dropped）；PATCH 确认待确认/改字段，写后广播 | C |
+| `POST /api/fragments` | 入参 `{source, rawType, rawText?, rawBlobPath?, device?}`；返回 `{fragment, run, items, plans}`——**加 run 是加法式，不破坏**；零条/失败不是 HTTP 错误，看 `run.status`（done/failed/limit）与 `run.message` | C 投放、B 拖拽采集 |
+| `GET /api/fragments`、`GET /api/fragments/:id` | 原始碎片 | C |
+| `GET /api/projects` | `{projects: 项目卡[], unclassified: 未归类条目[]}`；卡 = 项目 + `unfinished/done/next(最近两件)/said(说过的话)/idleDays(多久没动)/lastActivityAt` | C 项目页 |
+| `GET/POST /api/projects`、`GET/PATCH/DELETE /api/projects/:id` | 项目 CRUD；同名自动归并；DELETE 是标记 dropped | C 项目页 |
+| `GET /api/agenda?from&to` | `{from, to, days:[{day, items:[{item, project}]}], recurring:[...]}`；from/to 是 YYYY-MM-DD，缺省今天起 14 天；rrule 项进 recurring 不占某天 | C 日程页 |
+| `GET /api/thoughts` | 想法倒序流 | C 想法页 |
+| `GET /api/confirmations` | `{items, count}`；确认走 `PATCH /api/items/:id` | C 待确认 |
+| `GET /api/now` | **空形状已冻结**：`{primary:null, alternates:[], energy:null, basis:[]}`，第 7 步只换实现 | C 此刻页 |
+| `GET /api/recent` | `{recent:[{fragment, run(可能 null), items}]}`，倒序；种子碎片 run 为 null 是常态 | C 最近页 |
+| `POST/GET /api/focus-sessions` | `{startedAt, plannedMinutes, actualMinutes?, endedEarly?, itemId?, projectId?}`；endedEarly=1 就是「下次继续」 | B 的 /focus |
+| `GET /api/events` | SSE 粗粒度广播 `{type:'changed', at}`，不带内容；连上先推一条；写操作后广播；HMR 断连由客户端重连 | C 两个窗口 |
+| `GET /api/runs/:id/events` | SSE，**形状已冻结**（见下）；现在是空实现：finished 补发一条 `run_finished`，第 5 步往里填 `tool_call` | B 气泡「进行中」 |
+
+`/api/runs/:id/events` 的三种事件（shared/run.ts 的 RunEvent）：
+
+```json
+{ "type": "run_started",  "at": "...", "runId": "..." }
+{ "type": "tool_call",    "at": "...", "step": 1, "tool": "getProject", "args": { "id": "..." } }
+{ "type": "run_finished", "at": "...", "status": "done", "counts": {"created":1,"updated":0,"dropped":0,"needsConfirm":0}, "message": "..." }
+```
+
+`tool_call` 只带工具名与参数，**不带工具结果**（碎片原文不进渲染进程）；气泡那句人话由 B 在前端本地映射。
 
 ## 6. 怎么跑
 

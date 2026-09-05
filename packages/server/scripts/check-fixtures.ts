@@ -74,13 +74,21 @@ console.log('\n静态检查')
     'project_id TEXT REFERENCES projects(id)',
     'external_id TEXT UNIQUE',
     'CREATE TABLE IF NOT EXISTS focus_sessions',
+    'CREATE TABLE IF NOT EXISTS runs',
   ]
   const missing = required.filter((s) => !flat.includes(s))
   assert(
     missing.length === 0,
-    'schema 含 projects / items.project_id / items.external_id / focus_sessions',
+    'schema 含 projects / items.project_id / items.external_id / focus_sessions / runs',
     missing.join('\n'),
   )
+}
+
+{
+  // 判据：两条 SSE 是 B 气泡与 C 双窗口同步的接口，形状已冻结——路由文件里必须有。
+  const routes = readFileSync(join(repoRoot, 'packages/server/src/routes/index.ts'), 'utf8')
+  const missing = ["'/api/events'", "'/api/runs/:id/events'"].filter((s) => !routes.includes(s))
+  assert(missing.length === 0, 'routes 含 /api/events 与 /api/runs/:id/events', missing.join('\n'))
 }
 
 {

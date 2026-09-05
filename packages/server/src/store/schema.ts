@@ -123,4 +123,18 @@ CREATE TABLE IF NOT EXISTS focus_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_focus_started ON focus_sessions(started_at);
+
+-- 一次投放的一次处理。「最近」页的落点、气泡回执与 /api/runs/:id/events 的共同对象。
+-- counts 是 JSON：{created, updated, dropped, needsConfirm}。
+CREATE TABLE IF NOT EXISTS runs (
+  id          TEXT PRIMARY KEY,
+  fragment_id TEXT NOT NULL REFERENCES fragments(id),
+  status      TEXT NOT NULL,               -- running|done|failed|limit
+  started_at  TEXT NOT NULL,
+  finished_at TEXT,
+  message     TEXT,                        -- 气泡那句话（回执）
+  counts      TEXT                         -- JSON RunCounts；失败时为 NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_fragment ON runs(fragment_id);
 `

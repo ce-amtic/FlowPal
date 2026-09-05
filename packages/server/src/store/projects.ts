@@ -92,6 +92,73 @@ export function dropProject(db: DatabaseSync, ctx: Ctx, id: string): void {
   db.prepare(`UPDATE projects SET status = 'dropped', updated_at = ? WHERE id = ?`).run(ctx.now, id)
 }
 
+/**
+ * 项目页一张卡需要的聚合。全部现查现算，不存——「多久没动」测的是回避而非进展，
+ * 由条目的最近改动与专注时段取 MAX 得出；「说过的」是用户自己说过的状态条目。
+ */
+export type ProjectCard = {
+  project: Project
+  /** 未完成（active）条数 */
+  unfinished: number
+  /** 已完成（done）条数 */
+  done: number
+  /** 接下来最近的两件（active，带日期），按日期排 */
+  next: { id: string; type: string; title: string; at: string }[]
+  /** 用户说过的话（state 条目标题，倒序） */
+  said: string[]
+  /** 多久没动（整天数）；没有任何活动时是 null */
+  idleDays: number | null
+  lastActivityAt: string | null
+}
+
+export function projectCards(db: DatabaseSync, now: string): ProjectCard[] {
+  const projects = listProjects(db)
+  const items = db.prepare(
+    `SELECT * FROM items WHERE project_id IS NOT NULL AND status != 'dropped'`,
+  ).all() as Record<string, any>[]
+
+  const focusActs = new Map<string, string>()
+  for (const row of db.prepare(
+    `SELECT project_id, MAX(started_at) AS at FROM focus_sessions WHERE project_id IS NOT NULL GROUP BY project_id`,
+  ).all() as { project_id: string; at: string }[]) {
+    focusActs.set(row.project_id, row.at)
+  }
+
+  const nowMs = new Date(now).getTime()
+  return projects.map((project) => {
+    const mine = items.filter((i) => i.project_id === project.id)
+    const active = mine.filter((i) => i.status === 'active')
+    const upcoming = active
+      .map((i) => ({ id: i.id, type: i.type, title: i.title, at: i.due_at ?? i.starts_at }))
+      .filter((x) => x.at)
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .slice(0, 2)
+    const said = mine
+      .filter((i) => i.type === 'state')
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+      .map((i) => i.title)
+
+    const lastActivityAt = [
+      focusActs.get(project.id) ?? null,
+      ...mine.map((i) => (i.updated_at as string) ?? (i.created_at as string)),
+    ].filter((x): x is string => x !== null)
+      .sort()
+      .at(-1) ?? null
+
+    return {
+      project,
+      unfinished: mine.filter((i) => i.status === 'active').length,
+      done: mine.filter((i) => i.status === 'done').length,
+      next: upcoming,
+      said,
+      idleDays: lastActivityAt
+        ? Math.floor((nowMs - new Date(lastActivityAt).getTime()) / 86_400_000)
+        : null,
+      lastActivityAt,
+    }
+  })
+}
+
 const ALLOWED_FIELDS = new Set(['name', 'statusNote', 'status'])
 
 function rowToProject(row: Record<string, any>): Project {
