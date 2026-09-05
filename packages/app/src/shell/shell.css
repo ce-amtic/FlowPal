@@ -165,6 +165,17 @@ body.in-electron:not(.on-mac) .titlebar { padding-right: var(--window-controls-w
 
 .state-empty { color: var(--fg-faint); }
 
+/*
+ * 空态那句话里的链接。不给它样式的话，落到的是浏览器默认的紫色下划线——全 App
+ * 唯一一处外来颜色，而且点过之后还会再变一次。
+ *
+ * 下划线保留：句中的链接只靠颜色区分，对色觉障碍不成立。
+ */
+.state a {
+  color: var(--accent);
+  text-underline-offset: 2px;
+}
+
 .state-error {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-box);
