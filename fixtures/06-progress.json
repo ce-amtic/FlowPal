@@ -1,0 +1,20 @@
+{
+  "now": "2026-10-16T19:30:00+08:00",
+  "fragment": {
+    "source": "paste",
+    "rawType": "text",
+    "rawText": "高数作业做到第三题，卡在积分不会做了。"
+  },
+  "expect": {
+    "count": 1,
+    "types": [
+      "progress"
+    ],
+    "statuses": [
+      "needs_confirm"
+    ],
+    "plans": [
+      "new"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "now": "2026-09-09T15:00:00+08:00",
+  "fragment": {
+    "source": "paste",
+    "rawType": "text",
+    "rawText": "下周三之前把那个报告发给老师"
+  },
+  "expect": {
+    "count": 1,
+    "types": [
+      "task"
+    ],
+    "dates": [
+      "2026-09-16"
+    ],
+    "statuses": [
+      "active"
+    ],
+    "plans": [
+      "new"
+    ]
+  }
+}

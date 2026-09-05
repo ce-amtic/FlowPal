@@ -1,0 +1,23 @@
+{
+  "now": "2026-10-12T10:00:00+08:00",
+  "fragment": {
+    "source": "paste",
+    "rawType": "text",
+    "rawText": "高数期中考试改期了：原定10月22日下午两点，改到10月29日下午两点，教室还是明德楼101。"
+  },
+  "expect": {
+    "count": 1,
+    "types": [
+      "event"
+    ],
+    "dates": [
+      "2026-10-29T14:00:00+08:00"
+    ],
+    "statuses": [
+      "active"
+    ],
+    "plans": [
+      "reschedule"
+    ]
+  }
+}

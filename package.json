@@ -12,6 +12,7 @@
     "check:fixtures": "pnpm --filter @flowpal/server check:fixtures",
     "check:tokens": "pnpm --filter @flowpal/app check:tokens",
     "check": "pnpm typecheck && pnpm check:tokens && pnpm check:fixtures",
+    "demo:reset": "pnpm --filter @flowpal/server demo:reset",
     "typecheck": "pnpm -r exec tsc --noEmit"
   },
   "devDependencies": {

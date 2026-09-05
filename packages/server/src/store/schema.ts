@@ -25,6 +25,20 @@ CREATE TABLE IF NOT EXISTS fragments (
   raw_blob_path TEXT                         -- 图片、文件落盘的相对路径
 );
 
+-- 项目：条目之上的一层长期追踪对象（一门课、一次申请、一篇论文）。
+-- 名字唯一（大小写不敏感）；空白归一在 store 层做（replace(空格)+lower 比较），
+-- 项目规模小，逐行比较足够，不必把归一塞进索引。
+CREATE TABLE IF NOT EXISTS projects (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  status_note TEXT,                        -- 可靠已知的部分（下一节点、用户说过的话）
+  status      TEXT NOT NULL,               -- active|done|dropped
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_name ON projects(name COLLATE NOCASE);
+
 -- 条目：五类共用一张宽表，多余的列留空。字段重合度高，拆表会让每个查询都要 union。
 CREATE TABLE IF NOT EXISTS items (
   id              TEXT PRIMARY KEY,
@@ -41,12 +55,15 @@ CREATE TABLE IF NOT EXISTS items (
   confidence      TEXT NOT NULL,
   location        TEXT,
   status          TEXT NOT NULL,             -- active|done|dropped|needs_confirm
+  project_id      TEXT REFERENCES projects(id),  -- 可为空：未归类是正常状态，不是待办
+  external_id     TEXT UNIQUE,               -- 结构化来源的稳定标识，覆盖写入的唯一键
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 CREATE INDEX IF NOT EXISTS idx_items_due    ON items(due_at);
+CREATE INDEX IF NOT EXISTS idx_items_project ON items(project_id);
 
 -- 一条条目来自哪些碎片。同一件事从多个来源进来是常态而不是例外，
 -- 合并时只往这张表追加一行，items 一个字段都不用动。
@@ -86,9 +103,38 @@ CREATE TABLE IF NOT EXISTS item_history (
   field       TEXT NOT NULL,
   old_value   TEXT,
   new_value   TEXT,
-  actor       TEXT NOT NULL,                 -- user|llm|merge
+  actor       TEXT NOT NULL,                 -- user|llm|merge|sync
   fragment_id TEXT REFERENCES fragments(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_history_item ON item_history(item_id);
+
+-- 专注时段：一次专注无条件产生的四个数（开始时刻、计划时长、实际时长、是否提前结束）。
+-- buildContext「观察到的」的唯一来源；「多久没动」「卡住了」也由它推算。
+CREATE TABLE IF NOT EXISTS focus_sessions (
+  id              TEXT PRIMARY KEY,
+  started_at      TEXT NOT NULL,
+  planned_minutes INTEGER NOT NULL,
+  actual_minutes  INTEGER,                  -- 提前结束或未填写时为 NULL
+  ended_early     INTEGER NOT NULL DEFAULT 0,  -- 0|1
+  item_id         TEXT REFERENCES items(id),
+  project_id      TEXT REFERENCES projects(id),
+  created_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_focus_started ON focus_sessions(started_at);
+
+-- 一次投放的一次处理。「最近」页的落点、气泡回执与 /api/runs/:id/events 的共同对象。
+-- counts 是 JSON：{created, updated, dropped, needsConfirm}。
+CREATE TABLE IF NOT EXISTS runs (
+  id          TEXT PRIMARY KEY,
+  fragment_id TEXT NOT NULL REFERENCES fragments(id),
+  status      TEXT NOT NULL,               -- running|done|failed|limit
+  started_at  TEXT NOT NULL,
+  finished_at TEXT,
+  message     TEXT,                        -- 气泡那句话（回执）
+  counts      TEXT                         -- JSON RunCounts；失败时为 NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_fragment ON runs(fragment_id);
 `
