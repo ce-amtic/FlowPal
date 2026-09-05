@@ -4,7 +4,7 @@ import { bridge } from '../../bridge.ts'
 import './collection.css'
 
 const TYPE_LABEL: Record<string, string> = {
-  event: '事件', task: '事务', thought: '念头', progress: '进度', state: '状态',
+  event: '事件', task: '事务', thought: '想法', progress: '进度', state: '状态',
 }
 
 /**
