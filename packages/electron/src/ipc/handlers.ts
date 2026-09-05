@@ -75,7 +75,7 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
 
   const onBeginDrag = (event: IpcMainEvent, point: unknown): void => {
     const pet = state.getPet()
-    if (!senderIs(event, pet) || !isPointerPoint(point)) return
+    if (!pet || !senderIs(event, pet) || !isPointerPoint(point)) return
     if (drag) return
     // Renderer coordinates are useful only for identifying the pointer. The
     // main process owns the screen-space cursor so a moving window, display
@@ -101,7 +101,7 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
 
   const onMoveDrag = (event: IpcMainEvent, point: unknown): void => {
     const pet = state.getPet()
-    if (!senderIs(event, pet) || !drag || !isPointerPoint(point)) return
+    if (!pet || !senderIs(event, pet) || !drag || !isPointerPoint(point)) return
     if (point.pointerId !== drag.pointerId) return
     let cursor: { x: number; y: number }
     try {
@@ -137,7 +137,7 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
     endDrag(true)
   }
 
-  const onReadClipboard = (event: IpcMainInvokeEvent): string => {
+  const onReadClipboard = async (event: IpcMainInvokeEvent): Promise<string> => {
     if (!senderIsKnown(event, state)) return ''
     return clipboard.readText()
   }

@@ -47,11 +47,10 @@ export function insertItem(
 }
 
 /**
- * 初始状态。低置信度进待确认（产品不催，用户永远可以不理它）；progress 没有所属项目
- * 也进待确认——进度是长期事情的记录，不存在无所属的进度（[[010]]、[[014]]）。
+ * 初始状态。进待确认的门槛是「错了不可逆」，不是「模型没把握」——low confidence 仍然直接落库，
+ * 用户在条目上自己改；只有 progress 没有所属项目才进待确认（[[010]]、[[015]]）。
  */
 export function resolveInitialStatus(e: ExtractedItem, projectId: string | null): ItemStatus {
-  if (e.confidence === 'low') return 'needs_confirm'
   if (e.type === 'progress' && projectId === null) return 'needs_confirm'
   return 'active'
 }

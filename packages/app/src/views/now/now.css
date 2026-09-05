@@ -1,26 +1,32 @@
+/* 形象、问候、精力自上而下三行，左对齐 */
 .now-head {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-  margin: var(--space-2) 0 var(--space-6);
+  position: relative;
+  margin: 0 0 var(--space-8);
 }
 
-/* 形象的位置。素材接进来之前先占住，避免版式后面整体挪一次 */
-.avatar {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-}
+.now-greeting { margin-top: var(--space-3); }
 
 .greeting {
   margin: 0;
-  font-size: var(--text-lead);
+  font-size: var(--text-title);
+  font-weight: 600;
   line-height: var(--leading-tight);
 }
 
-/* 模型对处境的那一句判断。它有凭据，所以它读得清 */
+/* 刷新是页级动作，钉在这一块的右上角，不参与三行的竖排 */
+.now-refresh {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.now-refresh:disabled { cursor: default; }
+
+.spinning { animation: spin var(--dur-spin) linear infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 模型对处境的那一句判断，问候语的副标题。它有凭据，所以它读得清 */
 .energy {
   margin: var(--space-2) 0 0;
   color: var(--fg-dim);
@@ -36,6 +42,18 @@
   background: var(--card);
   box-shadow: var(--card-shadow);
 }
+
+/* 事情的名字。小字、弱色：它是上下文，不是这一屏要读的那句 */
+.now-title {
+  display: inline-block;
+  margin-bottom: var(--space-3);
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.now-title:hover { color: var(--accent); }
 
 /* 这一句是全 App 最大的字。它是用户此刻唯一需要读进去的东西 */
 .now-step {
@@ -72,10 +90,82 @@ button.primary {
 
 button.primary:hover { opacity: 0.88; }
 
-/* 出处入口挨着动作放，但推到最右：它是随时可查，不是下一步 */
-.now-open {
-  margin-left: auto;
-  text-decoration: none;
+/* ── 记录框 ─────────────────────────────────────────────── */
+
+/*
+ * 输入框和它下面的动作共用一块底，看起来是一件东西而不是两件——两个盒子叠在
+ * 一起，读到的是「先填这个，再点那个」。
+ */
+.composer {
+  margin: var(--space-8) 0 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-box);
+  background: var(--field);
+  transition: background var(--dur-fast) var(--ease);
 }
 
-.upcoming { margin-top: var(--space-10); }
+/*
+ * 钉在窗口底部。正文在它上方滚，所以在这一页的任何位置记一条都是零点击。
+ *
+ * 底色必须不透明：滚上来的正文会从它背后过去。
+ */
+.composer-floating {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-5);
+  transform: translateX(-50%);
+  width: min(var(--content-max), calc(100% - var(--space-12)));
+  margin: 0;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+
+.composer:focus-within { background: var(--field-focus); }
+.composer-floating:focus-within { background: var(--surface); }
+
+.composer-box {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  line-height: var(--leading);
+  resize: none;
+  outline: none;
+}
+
+.composer-box::placeholder { color: var(--fg-faint); }
+
+.composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.composer-note {
+  margin-right: auto;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.composer-failed { color: var(--danger); }
+
+/* 比那颗「开始」小一号：记录是随手的动作，不是这一屏的主张 */
+.composer-send {
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--text-body);
+}
+
+.composer-send:disabled { cursor: default; opacity: 0.4; }
+
+/* ── 接下来 ─────────────────────────────────────────────── */
+
+.upcoming { margin-top: var(--space-8); }
+
+/* 通向日程的那一行，语气要比条目更轻——它不是一件事 */
+.row-more { color: var(--fg-dim); font-size: var(--text-aux); }

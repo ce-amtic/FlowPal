@@ -5,6 +5,7 @@ import { inElectron } from '../bridge.ts'
 import { transition } from '../tokens/motion.ts'
 import { TitleBar } from './TitleBar.tsx'
 import { PendingOverlay } from './PendingOverlay.tsx'
+import { PageBoundary } from './PageBoundary.tsx'
 import { useServerEvents } from './useServerEvents.ts'
 import { NowPage } from '../views/now/NowPage.tsx'
 import { RecentPage } from '../views/recent/RecentPage.tsx'
@@ -48,18 +49,20 @@ export function App() {
             transition={transition.base}
             className="page-inner"
           >
-            <Routes location={location}>
-              <Route path="/" element={<Navigate to="/now" replace />} />
-              <Route path="/now" element={<NowPage />} />
-              <Route path="/recent" element={<RecentPage />} />
-              <Route path="/agenda" element={<AgendaPage />} />
-              <Route path="/projects" element={<ProjectsPage />} />
-              <Route path="/projects/:id" element={<ProjectPage />} />
-              <Route path="/thoughts" element={<ThoughtsPage />} />
-              <Route path="/items/:id" element={<ItemPage />} />
-              <Route path="/focus" element={<FocusPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Routes>
+            <PageBoundary pathname={location.pathname}>
+              <Routes location={location}>
+                <Route path="/" element={<Navigate to="/now" replace />} />
+                <Route path="/now" element={<NowPage />} />
+                <Route path="/recent" element={<RecentPage />} />
+                <Route path="/agenda" element={<AgendaPage />} />
+                <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/projects/:id" element={<ProjectPage />} />
+                <Route path="/thoughts" element={<ThoughtsPage />} />
+                <Route path="/items/:id" element={<ItemPage />} />
+                <Route path="/focus" element={<FocusPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Routes>
+            </PageBoundary>
           </motion.div>
         </AnimatePresence>
       </main>

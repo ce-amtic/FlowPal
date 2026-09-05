@@ -254,7 +254,7 @@ export const NOW: NowView = {
     },
   ],
   energy: '上午四节连堂上到中午，现在离你的高峰还有六个小时。',
-  basis: ['i_mail', 'i_midterm', 'i_seminar'],
+  basis: ['i_mail', 'i_midterm', '上午 8:00–12:00 连排四节'],
 }
 
 export const PROJECT_CARDS: ProjectCard[] = [

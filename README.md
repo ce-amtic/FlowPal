@@ -77,6 +77,13 @@ data/        校历（进仓库）与 SQLite（不进）
   `require('electron')` 返回字符串而不是对象。新 `dev:desktop` 会显式解除它。
 - `pnpm demo:reset` 会删掉并重建库文件。**server 开着的时候跑它，server 仍然抓着
   被删掉的那份**，于是「重置了，界面却没变」。重置后重启 server。
+- **`pnpm dev` 与 `pnpm dev:server` 用的不是同一个库。** Electron 把库放在
+  `~/Library/Application Support/FlowPal/data`，`dev:server` 用仓库里的 `data/`。
+  所以在完整应用里灌种子要指定目录，否则重置完打开应用还是空的：
+
+  ```bash
+  pnpm demo:reset "$HOME/Library/Application Support/FlowPal/data"
+  ```
 - server 固定监听 5123。已经开着 `pnpm dev:server` 再跑 `pnpm dev`，第二个会以
   `EADDRINUSE` 弹一个 Electron 报错框。`lsof -ti :5123 | xargs kill` 清掉前一个。
 - `data/calendar.json` 是真实校历（2026-09-05 从微人大门户「校历」实拉：秋季

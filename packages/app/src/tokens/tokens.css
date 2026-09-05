@@ -43,6 +43,10 @@
   --success: #55734a;
   --success-soft: #6b9b59;
 
+  /* 形象。它是一块实时绘制的软胶，所以颜色只能给 WebGL 一个纯色与一个阴影浓度 */
+  --pebble: #c6c5be;
+  --pebble-shadow: 0.18;
+
   /* ── 圆角：两个值 ─────────────────────────────────────── */
   --radius-box: 12px;           /* 卡片、输入框、浮层 */
   --radius-pill: 999px;         /* 标签、角标 */
@@ -74,6 +78,8 @@
   --dur-base: 220ms;            /* 切换、展开、条目进出 */
   --dur-slow: 400ms;            /* 形象、整块转场 */
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* 循环指示器（转圈）。它不是转场，所以不在上面三档里，也不镜像进 motion.ts */
+  --dur-spin: 1000ms;
 
   /* ── 结构 ─────────────────────────────────────────────── */
   --titlebar-h: 44px;
@@ -113,6 +119,9 @@
     --danger-strong: #f09a8c;
     --success: #a7c99a;
     --success-soft: #8dbb7e;
+
+    --pebble: #8e8d86;
+    --pebble-shadow: 0.34;
   }
 }
 
@@ -122,5 +131,7 @@
     --dur-fast: 1ms;
     --dur-base: 1ms;
     --dur-slow: 1ms;
+    /* 转圈不归零：它是「正在做事」的唯一提示，停下来等于没有反馈。放慢即可 */
+    --dur-spin: 2400ms;
   }
 }

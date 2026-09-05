@@ -55,7 +55,7 @@ export function PendingOverlay({ onClose }: { onClose: () => void }) {
         </div>
 
         {error && <ErrorState error={error} />}
-        {!error && pending.length === 0 && <Empty>没有需要确认的东西。</Empty>}
+        {!error && pending.length === 0 && <Empty>没有需要确认的条目。</Empty>}
 
         <ul className="plain-list">
           {pending.map((item) => (

@@ -20,7 +20,7 @@
   align-self: center;
 }
 
-/* 投放进来的那句原话是这一行的主语，用正文色。超出的部分截掉，永远只占一行 */
+/* 记录下来的那句原话是这一行的主语，用正文色。超出的部分截掉，永远只占一行 */
 .drop-raw {
   min-width: 0;
   overflow: hidden;
@@ -45,6 +45,3 @@
 
 /* 失败要看得出是失败，但不必红成一片警告：原文已经存住了 */
 .drop-failed { color: var(--danger); }
-
-.drop-note button { margin-left: var(--space-3); }
-.drop-failed button { color: var(--danger); }
