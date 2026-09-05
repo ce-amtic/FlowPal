@@ -37,4 +37,6 @@ contextBridge.exposeInMainWorld('flowpal', {
   onFilesDropped: (cb: (paths: string[]) => void) => { onFiles = cb; wireDrop() },
   readClipboard: (): Promise<string> => ipcRenderer.invoke('flowpal:read-clipboard'),
   hideWindow: (): Promise<void> => ipcRenderer.invoke('flowpal:hide-window'),
+  // 登录要一个真的浏览器窗口，只有主进程开得出来。设置页调它。
+  signInToRuc: () => ipcRenderer.invoke('flowpal:sign-in-ruc'),
 })

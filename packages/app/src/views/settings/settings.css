@@ -20,3 +20,28 @@
 .settings-field + .settings-note {
   margin-top: var(--space-8);
 }
+
+/* 同步状态那一行。用正文色而不是弱色：它是这一节里唯一要读的那句话 */
+.settings-status {
+  margin: var(--space-5) 0 var(--space-3);
+  color: var(--fg-dim);
+}
+
+/* 三路来源各占一行，名字在左、结果在右，扫一眼就知道是哪一路停了 */
+.settings-sources {
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-aux);
+  color: var(--fg-dim);
+}
+
+.settings-sources li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+}
+
+/* 没做成的那一路弱化，不标红：未配置的邮件不是错误，只是没开 */
+.settings-source-idle { color: var(--fg-faint); }

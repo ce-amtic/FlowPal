@@ -4,6 +4,8 @@
  * 有 mock 的意义是界面全程可以在普通浏览器标签页里开发，不启动 Electron，
  * 于是界面这条线不被主进程那条线阻塞。
  */
+export type SignInResult = { ok: true; saved: number } | { ok: false; message: string }
+
 export type FlowpalBridge = {
   /** 主进程的 process.platform。窗口底色与窗口按钮的位置按平台分，不能一概而论 */
   platform: string
@@ -11,6 +13,13 @@ export type FlowpalBridge = {
   onFilesDropped: (cb: (paths: string[]) => void) => void
   readClipboard: () => Promise<string>
   hideWindow: () => Promise<void>
+  /**
+   * 开一个真的浏览器窗口登录人大门户，把那次登录留下的 Cookie 交给 server。
+   *
+   * 走 IPC 而不是 HTTP，是因为它需要一个浏览器窗口——分界线仍是「手机端将来要不要
+   * 得起」，而手机端要不起这个。同步本身要得起，所以那条走 HTTP。
+   */
+  signInToRuc: () => Promise<SignInResult>
 }
 
 declare global {
@@ -23,6 +32,9 @@ const browserMock: FlowpalBridge = {
   onFilesDropped: () => {},
   readClipboard: () => navigator.clipboard.readText(),
   hideWindow: async () => {},
+  // 浏览器标签页里开不出登录窗口。说清楚而不是假装成功——设置页据此显示
+  // 「登录要在桌面应用里做」，而不是转一圈之后仍然没有登录态。
+  signInToRuc: async () => ({ ok: false, message: '登录要在桌面应用里做' }),
 }
 
 export const bridge: FlowpalBridge = window.flowpal ?? browserMock

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, nativeTheme } from 'electron'
 import { join } from 'node:path'
-import { createServer, loadConfig } from '@flowpal/server'
+import { createServer, loadConfig, ServerConfig } from '@flowpal/server'
+import { signInToRuc } from './ruc-login.ts'
 
 /**
  * 这是全仓库唯一 import electron 的地方。
@@ -40,9 +41,9 @@ const windowControls = () => ({
 
 app.whenReady().then(() => {
   // dataDir 由这一侧算好传进去；server 自己不知道 app.getPath 存在。
-  const server = createServer(loadConfig(repoRoot, {
-    dataDir: join(app.getPath('userData'), 'data'),
-  }))
+  const rawConfig = loadConfig(repoRoot, { dataDir: join(app.getPath('userData'), 'data') })
+  const config = ServerConfig.parse(rawConfig)
+  const server = createServer(rawConfig)
   console.log(`FlowPal server: ${server.url}`)
 
   const isMac = process.platform === 'darwin'
@@ -98,7 +99,43 @@ app.whenReady().then(() => {
   ipcMain.handle('flowpal:read-clipboard', () => clipboard.readText())
   ipcMain.handle('flowpal:hide-window', () => { win?.hide() })
 
-  app.on('will-quit', () => { globalShortcut.unregisterAll(); server.close() })
+  /*
+   * 登录窗口只能开在这里：它需要一个真的浏览器，而全仓库只有这一侧有。
+   * 采到的 Cookie 立刻交给 server，之后取数全由 server 自己发出——它照旧只认
+   * 一批 Cookie，不知道有过一个窗口。
+   */
+  ipcMain.handle('flowpal:sign-in-ruc', async () => {
+    const result = await signInToRuc(server.url, config.token)
+    if (result.ok) void syncNow()
+    return result
+  })
+
+  /*
+   * 启动时拉一次，之后按配置的间隔（默认六小时）再拉。课表与考试变化很慢。
+   *
+   * **失败不重试，也不弹任何东西。** 下一个周期自然会再试；写重试循环只会把一个
+   * 明确的失败变成一串看不见的失败。失败的落点是设置页上的那一行状态。
+   */
+  const syncNow = async (): Promise<void> => {
+    const res = await fetch(`${server.url}/api/sync`, {
+      method: 'POST',
+      headers: config.token === null ? {} : { Authorization: `Bearer ${config.token}` },
+    }).catch((e: unknown) => {
+      console.error('同步没能发出：', e)
+      return null
+    })
+    // 409 是「已经有一轮在跑」，不是失败：开机时定时器和启动那一次会撞上。
+    if (res !== null && res.status !== 409) console.log(`同步：${await res.text()}`)
+  }
+
+  void syncNow()
+  const syncTimer = setInterval(() => void syncNow(), config.sync.intervalMinutes * 60_000)
+
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll()
+    clearInterval(syncTimer)
+    server.close()
+  })
 })
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })

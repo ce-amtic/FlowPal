@@ -1,5 +1,4 @@
-import { ImapFlow } from 'imapflow'
-import { simpleParser, type ParsedMail } from 'mailparser'
+import type { ParsedMail } from 'mailparser'
 import type { MailConfig } from '../config.ts'
 
 /**
@@ -36,6 +35,16 @@ export function describeMailbox(config: MailConfig | null): string {
  * 处理没处理是两件事。
  */
 export async function fetchMail(config: MailConfig, since: number): Promise<MailMessage[]> {
+  /*
+   * 这两个包在第一次真要读邮件时才载入。
+   *
+   * 它们连同一整套 MIME 与字符集表被打进 Electron 主进程那个 bundle，而邮件是
+   * 一条**默认不开**的来源。写成顶层 import 的话，这一大坨里任何一处在打包后
+   * 出问题，整个应用会连窗口都开不出来——为一个多数人没配的来源冒这个险不值得。
+   */
+  const { ImapFlow } = await import('imapflow')
+  const { simpleParser } = await import('mailparser')
+
   const client = new ImapFlow({
     host: config.host,
     port: config.port,

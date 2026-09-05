@@ -127,6 +127,30 @@ export type NewFocusSession = {
   itemId: string | null
 }
 
+/**
+ * 和外部来源同步的状态。
+ *
+ * **失败不重试，所以失败必须有个看得见的落点**，就是这里。设置页把它显示成
+ * 「上次同步 09:12 · 需要重新登录」。桌宠不为后台同步失败弹东西。
+ */
+export type SyncSourceResult = {
+  label: string
+  created: number
+  updated: number
+  /** 这一路没做成时的原因。做成了为 null */
+  skipped: string | null
+}
+
+export type SyncStatus = {
+  /** never = 一次都没同步过；expired = 登录态失效，要重新登录 */
+  state: 'never' | 'ok' | 'expired' | 'error'
+  at: string | null
+  message: string | null
+  sources: SyncSourceResult[]
+  signedIn: boolean
+  signedInAt: string | null
+}
+
 export type Api = {
   listItems: () => Promise<{ items: ItemWithSources[] }>
   getItem: (id: string) => Promise<{ item: ItemWithSources; history: ItemHistoryRow[] }>
@@ -149,6 +173,10 @@ export type Api = {
   listThoughts: () => Promise<{ thoughts: ItemWithSources[] }>
   getSettings: () => Promise<{ settings: Settings }>
   patchSettings: (patch: Partial<Record<keyof Settings, string>>) => Promise<{ settings: Settings }>
+  getSyncStatus: () => Promise<SyncStatus>
+  /** 现在就同步一次。正在跑时服务端回 409，调用方不重试——那一轮会把活干完 */
+  syncNow: () => Promise<{ state: string; message: string; status: SyncStatus }>
+  signOutOfRuc: () => Promise<{ status: SyncStatus }>
   postFocusSession: (session: NewFocusSession) => Promise<{ session: { id: string } }>
   /**
    * 把一张图的字节存进库目录，拿回它的绝对路径。
@@ -187,6 +215,9 @@ const realApi: Api = {
   listThoughts: () => call('/api/thoughts'),
   getSettings: () => call('/api/settings'),
   patchSettings: (patch) => call('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+  getSyncStatus: () => call('/api/sync'),
+  syncNow: () => call('/api/sync', { method: 'POST' }),
+  signOutOfRuc: () => call('/api/sync/session', { method: 'DELETE' }),
   postFocusSession: (session) =>
     call('/api/focus-sessions', { method: 'POST', body: JSON.stringify(session) }),
   uploadImage: (contentType, base64) =>
@@ -217,4 +248,5 @@ export const queryKeys = {
   confirmations: ['confirmations'] as const,
   thoughts: ['thoughts'] as const,
   settings: ['settings'] as const,
+  sync: ['sync'] as const,
 }

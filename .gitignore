@@ -2,13 +2,15 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# 本地凭据：LLM key 与教务系统学号密码，永不进仓库
+# 本地凭据：LLM key 与学校邮箱的客户端授权码，永不进仓库
 config.local.json
 
 # 用户数据：SQLite 与落盘的图片 / 文件
 data/*.db
 data/*.db-*
 data/blobs/
+# 学校门户的登录态。它等价于一次登录，进仓库就是把账号交出去
+data/ruc-cookies.json
 # check:fixtures 每次跑都重建的一次性库
 data/check-run/
 
