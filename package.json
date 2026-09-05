@@ -9,6 +9,7 @@
     "dev:app": "pnpm --filter @flowpal/app dev",
     "dev:desktop": "pnpm --filter @flowpal/desktop dev",
     "check:fixtures": "pnpm --filter @flowpal/server check:fixtures",
+    "demo:reset": "pnpm --filter @flowpal/server demo:reset",
     "typecheck": "pnpm -r exec tsc --noEmit"
   },
   "devDependencies": {

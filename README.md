@@ -38,6 +38,13 @@ pnpm check:fixtures
 pnpm typecheck
 ```
 
+演示用「一个用了两周的库」一键重置（删库、建表、灌相对日期的种子，三秒回到
+干净状态；种子日期相对执行时刻算，演示当天跑永远成立）：
+
+```bash
+pnpm demo:reset
+```
+
 ## 结构
 
 ```
@@ -68,5 +75,6 @@ data/        校历（进仓库）与 SQLite（不进）
   `require('electron')` 返回字符串而不是对象。`dev:desktop` 里已经把它去掉了。
 - server 固定监听 5123。已经开着 `pnpm dev:server` 再跑 `pnpm dev`，第二个会以
   `EADDRINUSE` 弹一个 Electron 报错框。`lsof -ti :5123 | xargs kill` 清掉前一个。
-- `data/calendar.json` 现在是占位数据。真实校历从教务系统拉一次替换掉——
-  `startMonday` 错了，所有「第 N 周」的解析全盘皆错。
+- `data/calendar.json` 是真实校历（2026-09-05 从微人大门户「校历」实拉：秋季
+  2026-09-07 开学、18 教学周；春季 2027-02-22 开学、19 教学周）。B 的教务同步
+  落地后会替换它。`startMonday` 错了，所有「第 N 周」的解析全盘皆错。

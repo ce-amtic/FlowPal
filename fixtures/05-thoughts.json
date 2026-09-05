@@ -1,0 +1,19 @@
+{
+  "now": "2026-10-15T21:40:00+08:00",
+  "fragment": {
+    "source": "hotkey",
+    "rawType": "text",
+    "rawText": "记得回小王消息，他问我要不要一起组队参加数学建模。另外论文里那张图要换成最新数据。"
+  },
+  "expect": {
+    "count": 2,
+    "types": [
+      "thought",
+      "thought"
+    ],
+    "plans": [
+      "new",
+      "new"
+    ]
+  }
+}

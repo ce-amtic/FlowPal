@@ -44,6 +44,23 @@ export type Fragment = {
   rawBlobPath: string | null
 }
 
+export const ProjectStatus = z.enum(['active', 'done', 'dropped'])
+export type ProjectStatus = z.infer<typeof ProjectStatus>
+
+/**
+ * 项目：条目之上的一层长期追踪对象（一门课、一次申请、一篇论文）。
+ * 名字唯一（忽略大小写与空白）——模型与用户重复建同名项目时归入既有项目，不新建。
+ */
+export type Project = {
+  id: string
+  name: string
+  /** 可靠已知的部分（下一节点、用户说过的话），不是进度百分比。 */
+  statusNote: string | null
+  status: ProjectStatus
+  createdAt: string
+  updatedAt: string
+}
+
 /** 条目。LLM 或确定性映射的产物，用户可改、可合并、可丢弃，改动记录保留。 */
 export type Item = {
   id: string
@@ -59,6 +76,10 @@ export type Item = {
   dateConfidence: Confidence | null
   confidence: Confidence
   location: string | null
+  /** 所属项目；null = 未归类，是正常状态不是待办。 */
+  projectId: string | null
+  /** 结构化来源（课表、考试、系统日历）的稳定标识，覆盖写入的唯一键。 */
+  externalId: string | null
   status: ItemStatus
   createdAt: string
   updatedAt: string

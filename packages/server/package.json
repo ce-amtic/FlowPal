@@ -9,7 +9,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "check:fixtures": "tsx scripts/check-fixtures.ts"
+    "check:fixtures": "tsx scripts/check-fixtures.ts",
+    "demo:reset": "tsx scripts/demo-reset.ts"
   },
   "//": "这个包不依赖 electron，也不依赖 @flowpal/app。将来要把它抽成独立后端，是把 packages/server 与 packages/shared 拷进新仓库、一行不改。scripts/check-fixtures.ts 里有一条断言扫这里对 electron 的引用。",
   "dependencies": {
