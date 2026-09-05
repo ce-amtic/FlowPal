@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Image, FileText, Mic, CalendarDays } from 'lucide-react'
-import { api, queryKeys, type Drop } from '../../api.ts'
+import { api, queryKeys, type RecentEntry } from '../../api.ts'
 import { ICON } from '../../tokens/icons.ts'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
 import { formatDayLabel, formatTime } from '../../lib/format.ts'
@@ -14,16 +14,9 @@ import './recent.css'
  * 某个项目，用户得自己去找；零条目与失败的碎片则连找都找不到，而那和「坏了」
  * 长得一模一样。
  *
- * 四种收场各有各的话，并且都以「原文已存」结尾——只要用户相信东西没丢，
- * 失败就只是没理解。
+ * 回执那句话由语义层给（四种收场各有各的说法，都以「原文已存」结尾），这里
+ * 不自己编——同一件事在气泡和这一页上必须是同一句。
  */
-const OUTCOME: Record<Exclude<Drop['outcome'], 'ok'>, { text: string; retry: boolean }> = {
-  empty: { text: '没找到需要记的东西。原文已存。', retry: false },
-  over_steps: { text: '这条太复杂，没能处理完。原文已存。', retry: true },
-  failed: { text: '没能理解这条。原文已存。', retry: true },
-  offline: { text: '连不上模型。原文已存。', retry: true },
-}
-
 export function RecentPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.recent,
@@ -33,61 +26,63 @@ export function RecentPage() {
   if (isLoading) return <Loading />
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />
 
-  const days = groupByDay(data?.drops ?? [])
+  const days = groupByDay(data?.recent ?? [])
   if (days.length === 0) return <Empty>还没有投放。</Empty>
 
   return (
     <>
-      {days.map(([day, drops]) => (
+      {days.map(([day, entries]) => (
         <section key={day} className="day">
           <h2 className="day-label">{formatDayLabel(day)}</h2>
-          <DropList drops={drops} />
+          <ul className="drops">
+            {entries.map((entry) => <Drop key={entry.fragment.id} entry={entry} />)}
+          </ul>
         </section>
       ))}
     </>
   )
 }
 
-function DropList({ drops }: { drops: Drop[] }) {
-  return (
-    <ul className="drops">
-      {drops.map(({ fragment, items, outcome }) => (
-        <li key={fragment.id} className="drop">
-          <div className="drop-head">
-            <span className="stamp">{formatTime(fragment.createdAt)}</span>
-            <SourceIcon rawType={fragment.rawType} />
-            <span className="drop-raw">{summarise(fragment.rawText, fragment.rawType)}</span>
-          </div>
+function Drop({ entry: { fragment, run, items } }: { entry: RecentEntry }) {
+  const failed = run?.status === 'failed' || run?.status === 'limit'
 
-          {outcome === 'ok' ? (
-            <ul className="drop-out">
-              {items.map((item) => (
-                <li key={item.id}>
-                  <Link to={`/items/${item.id}`}>{item.title}</Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="drop-note">
-              {OUTCOME[outcome].text}
-              {OUTCOME[outcome].retry && <button className="quiet">重试</button>}
-            </p>
-          )}
-        </li>
-      ))}
-    </ul>
+  return (
+    <li className="drop">
+      <div className="drop-head">
+        <span className="stamp">{formatTime(fragment.createdAt)}</span>
+        <SourceIcon rawType={fragment.rawType} />
+        <span className="drop-raw">{summarise(fragment.rawText, fragment.rawType)}</span>
+      </div>
+
+      {items.length > 0 && (
+        <ul className="drop-out">
+          {items.map((item) => (
+            <li key={item.id}>
+              <Link to={`/items/${item.id}`}>{item.title}</Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {items.length === 0 && run?.message && (
+        <p className="drop-note">
+          {run.message}
+          {failed && <button className="quiet">重试</button>}
+        </p>
+      )}
+    </li>
   )
 }
 
 /** 按天分组：不分组的话，昨晚那条看起来和今天的一样。 */
-function groupByDay(drops: Drop[]): [string, Drop[]][] {
-  const byDay = new Map<string, Drop[]>()
+function groupByDay(entries: RecentEntry[]): [string, RecentEntry[]][] {
+  const byDay = new Map<string, RecentEntry[]>()
 
-  for (const drop of drops) {
-    const day = drop.fragment.createdAt.slice(0, 10)
+  for (const entry of entries) {
+    const day = entry.fragment.createdAt.slice(0, 10)
     const bucket = byDay.get(day)
-    if (bucket) bucket.push(drop)
-    else byDay.set(day, [drop])
+    if (bucket) bucket.push(entry)
+    else byDay.set(day, [entry])
   }
 
   for (const bucket of byDay.values()) {

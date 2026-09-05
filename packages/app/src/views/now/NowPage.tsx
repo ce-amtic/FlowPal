@@ -31,22 +31,23 @@ export function NowPage() {
 
   if (isLoading) return <Loading />
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />
-  if (!data || data.empty) {
+
+  // primary 为 null 是库里没有可推的，不是出错：不调模型，请用户先扔点东西进来
+  if (!data?.primary) {
     return <Empty>还没有可以开始的事。扔点什么进来，或者从日程里挑一件。</Empty>
   }
 
-  const candidate = data.candidates[pickIndex] ?? data.candidates[0]
-  if (!candidate) return <Empty>还没有可以开始的事。</Empty>
-
+  const candidates = [data.primary, ...data.alternates]
+  const candidate = candidates[pickIndex] ?? data.primary
   const step = candidate.steps[stepIndex] ?? candidate.steps[0] ?? candidate.title
   const hasSmaller = stepIndex < candidate.steps.length - 1
-  const hasOther = data.candidates.length > 1
+  const hasOther = candidates.length > 1
 
   return (
     <div className="now">
       <div className="now-head">
         <div className="avatar" aria-hidden />
-        <p className="greeting">{data.greeting}</p>
+        <p className="greeting">{greeting()}</p>
       </div>
 
       <motion.div layout transition={transition.base} className="card now-card">
@@ -56,10 +57,7 @@ export function NowPage() {
         <div className="now-actions">
           <button className="primary" onClick={() => navigate('/focus')}>开始</button>
           {hasOther && (
-            <button
-              className="quiet"
-              onClick={() => setPickIndex((i) => (i + 1) % data.candidates.length)}
-            >
+            <button className="quiet" onClick={() => setPickIndex((i) => (i + 1) % candidates.length)}>
               换一件
             </button>
           )}
@@ -71,17 +69,44 @@ export function NowPage() {
         </div>
       </motion.div>
 
-      {/* 只显示一件事时，这条是「剩下的没丢」的凭据，不是装饰 */}
-      <ul className="date-band">
-        {data.dateBand.map((d) => (
-          <li key={`${d.at}-${d.title}`}>
-            <span className="stamp">{formatDay(d.at)}</span>
-            {d.title}
-          </li>
-        ))}
-      </ul>
+      <DateBand />
 
-      <p className="energy">{data.energyReading}</p>
+      {data.energy && <p className="energy">{data.energy}</p>}
     </div>
   )
+}
+
+/**
+ * 底部那条日期带。它不是装饰，是「剩下的没丢」的凭据——只显示一件事而不给这个
+ * 凭据，用户不敢信。取的是日程那份数据，不需要「此刻」的接口再返一遍。
+ */
+function DateBand() {
+  const { data } = useQuery({ queryKey: queryKeys.agenda, queryFn: api.getAgenda })
+
+  const upcoming = (data?.days ?? [])
+    .flatMap((d) => d.items.map((entry) => ({ day: d.day, title: entry.item.title })))
+    .slice(0, 4)
+
+  if (upcoming.length === 0) return null
+
+  return (
+    <ul className="date-band">
+      {upcoming.map((u) => (
+        <li key={`${u.day}-${u.title}`}>
+          <span className="stamp">{formatDay(u.day)}</span>
+          {u.title}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** 问候语按本机时刻算。它不是判断，所以不必等模型 */
+function greeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 6) return '还没睡。'
+  if (hour < 11) return '早上好。'
+  if (hour < 14) return '中午好。'
+  if (hour < 18) return '下午好。'
+  return '晚上好。'
 }

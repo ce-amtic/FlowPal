@@ -6,15 +6,19 @@
 
 .drop { padding: var(--space-4) 0; }
 
+/* 原文可能换行，所以时刻与图标对齐首行，不居中 */
 .drop-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
   color: var(--fg-dim);
   font-size: var(--text-aux);
 }
 
-.drop-icon { flex: 0 0 auto; }
+.drop-icon {
+  flex: 0 0 auto;
+  margin-top: var(--space-1);
+}
 
 .drop-raw {
   color: var(--fg);

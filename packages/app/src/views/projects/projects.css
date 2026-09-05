@@ -53,6 +53,16 @@
   font-size: var(--text-aux);
 }
 
+.project-next,
+.project-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: var(--space-2) 0 0;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
 /* 详情页顶部那句状态，和下面第一组之间要有呼吸 */
 .project-lead { margin-bottom: var(--space-6); }
 

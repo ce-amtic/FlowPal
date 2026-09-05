@@ -21,8 +21,8 @@ const PAGES = [
 export function TitleBar({ onOpenPending }: { onOpenPending: () => void }) {
   const navigate = useNavigate()
 
-  const { data } = useQuery({ queryKey: queryKeys.pending, queryFn: api.listPending })
-  const pending = data?.items.length ?? 0
+  const { data } = useQuery({ queryKey: queryKeys.confirmations, queryFn: api.listConfirmations })
+  const pending = data?.count ?? 0
 
   return (
     <header className="titlebar">

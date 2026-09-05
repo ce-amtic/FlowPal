@@ -1,19 +1,16 @@
-import type { Citation, Item } from '@flowpal/shared'
+import type { Citation, Item, Project, Run } from '@flowpal/shared'
 import { mockApi } from './mock/mockApi.ts'
 
 /**
- * 主窗口消费的 HTTP 接口，以及它的形状。
+ * 主窗口消费的 HTTP 接口。
  *
- * 五页各自一个取数接口，而不是一个通用查询加前端分组：同一条东西在不同页里
- * 的形状不同（日程按天分组，项目要带「多久没动」，最近要带这次投放的产出），
- * 把分组放在前端等于把同一份逻辑写五遍。
- *
- * 下面这些类型就是主窗口与语义层之间的契约。已经落地的走真实接口，还没落地的
- * 在真实模式下会以出错态呈现——不静默显示空，因为空和坏长得一模一样。
+ * 形状由语义层冻结，这里只是照抄一份类型——改形状要三方一起改，不是这个文件
+ * 单方面说了算。五页各自一个取数接口而不是一个通用查询加前端分组：同一条东西
+ * 在不同页里的形状不同（日程按天分组、项目要带「多久没动」、最近要带那次投放的
+ * 回执），把分组放在前端等于把同一份逻辑写五遍。
  */
 
 export type ItemWithSources = Item & {
-  projectId: string | null
   sourceFragmentIds: string[]
   citations: Citation[]
 }
@@ -21,70 +18,67 @@ export type ItemWithSources = Item & {
 export type Fragment = {
   id: string
   createdAt: string
+  device: string
   source: string
   rawType: string
   rawText: string | null
   rawBlobPath: string | null
 }
 
-export type Project = {
-  id: string
-  name: string
-  statusNote: string | null
-  status: 'active' | 'done' | 'dropped'
-  /** 最后一次有动静距今多少天。「多久没动」这一行的来源，也是这一页的核心 */
+/** 项目卡：一次取数就够画一张卡，不用为每个项目再打一次接口 */
+export type ProjectCard = {
+  project: Project
+  unfinished: number
+  done: number
+  /** 接下来最近的两件 */
+  next: { id: string; type: string; title: string; at: string }[]
+  /** 用户说过的话 */
+  said: string[]
+  /** 多久没动。它测的是回避而非进展，是这一页的核心 */
   idleDays: number | null
+  lastActivityAt: string | null
 }
 
 /**
- * 「此刻」的一个候选：一件事、一句依据、以及由粗到细的几个切口。
- *
- * 「换一件」在候选之间走，「更小的一步」在同一个候选的 steps 里往后走。
- * 两者都是本地切换——这一组是一次调用返回的，点击不再调模型。
+ * 「此刻」。语义层已冻形状、第 7 步填实现，所以这一页现在能照着写，之后零改动接上。
+ * primary 为 null 表示库里没有可推的：不调模型，页面显示投放入口。
  */
-export type NowCandidate = {
+export type NowPick = {
   itemId: string
   title: string
-  /** 为什么是它。必须落在具体的处境上，不是泛泛的鼓励 */
+  /** 为什么是它。必须落在具体的处境上 */
   reason: string
-  /** 第一步；其后是更小的切口 */
+  /** 第一步；其后是更小的切口。「更小的一步」在这里面往后走 */
   steps: string[]
-  /** 这次判断用到的材料：条目 id 或原文引文 */
+}
+
+export type NowView = {
+  primary: NowPick | null
+  alternates: NowPick[]
+  /** 模型的一句判断，必须引用一条给它的事实 */
+  energy: string | null
+  /** 这次输出用了哪些材料 */
   basis: string[]
 }
 
-export type NowView =
-  | { empty: true }
-  | {
-      empty: false
-      greeting: string
-      /** 模型的一句判断，必须引用一条给它的事实 */
-      energyReading: string
-      candidates: NowCandidate[]
-      /** 底部那条日期带：只显示一件事时，它是「剩下的没丢」的凭据 */
-      dateBand: { at: string; title: string }[]
-    }
-
-export type ProjectsView = {
-  projects: Project[]
-  /** 顶部的「未归类」组。它是正常状态，不是待办 */
-  unassigned: ItemWithSources[]
-}
-
-export type ProjectDetail = {
-  project: Project
-  upcoming: ItemWithSources[]
-  todo: ItemWithSources[]
-  done: ItemWithSources[]
-  /** 用户自己扔进来的进度陈述，按时间。它是几句带日期的话，不是一条进展线 */
-  said: { at: string; text: string }[]
-}
-
-/** 一次投放，以及它产出了什么。零条目与失败都是正常结果，都要有落点 */
-export type Drop = {
+/** 一次投放：碎片 + 它的回执 + 抽出或更新到的条目。零条与失败都是常态 */
+export type RecentEntry = {
   fragment: Fragment
+  run: Run | null
   items: ItemWithSources[]
-  outcome: 'ok' | 'empty' | 'over_steps' | 'failed' | 'offline'
+}
+
+export type AgendaEntry = {
+  item: ItemWithSources
+  project: { id: string; name: string | null } | null
+}
+
+export type AgendaView = {
+  from: string
+  to: string
+  days: { day: string; items: AgendaEntry[] }[]
+  /** 重复项不占某一天，界面压成每天顶上的细带 */
+  recurring: AgendaEntry[]
 }
 
 export type Api = {
@@ -96,12 +90,14 @@ export type Api = {
     rawType: string
     rawText?: string
     rawBlobPath?: string
-  }) => Promise<{ fragment: { id: string }; items: ItemWithSources[] }>
+  }) => Promise<{ fragment: Fragment; run: Run; items: ItemWithSources[] }>
   getNow: () => Promise<NowView>
-  listRecent: () => Promise<{ drops: Drop[] }>
-  listProjects: () => Promise<ProjectsView>
-  getProject: (id: string) => Promise<ProjectDetail>
-  listPending: () => Promise<{ items: ItemWithSources[] }>
+  listRecent: () => Promise<{ recent: RecentEntry[] }>
+  getAgenda: () => Promise<AgendaView>
+  listProjects: () => Promise<{ projects: ProjectCard[]; unclassified: ItemWithSources[] }>
+  getProject: (id: string) => Promise<{ project: Project; items: ItemWithSources[] }>
+  listConfirmations: () => Promise<{ items: ItemWithSources[]; count: number }>
+  listThoughts: () => Promise<{ thoughts: ItemWithSources[] }>
   serverUrl: string
 }
 
@@ -123,14 +119,11 @@ const realApi: Api = {
   throwIn: (body) => call('/api/fragments', { method: 'POST', body: JSON.stringify(body) }),
   getNow: () => call('/api/now'),
   listRecent: () => call('/api/recent'),
+  getAgenda: () => call('/api/agenda'),
   listProjects: () => call('/api/projects'),
   getProject: (id) => call(`/api/projects/${id}`),
-  // 待确认队列的接口还没落地。角标不能因为缺一个接口就静默消失，所以先从
-  // 条目列表里筛；那个接口一到，这里改一行，别处不动。
-  listPending: async () => {
-    const { items } = await call<{ items: ItemWithSources[] }>('/api/items')
-    return { items: items.filter((i) => i.status === 'needs_confirm') }
-  },
+  listConfirmations: () => call('/api/confirmations'),
+  listThoughts: () => call('/api/thoughts'),
   serverUrl: BASE,
 }
 
@@ -144,13 +137,15 @@ export const usingMock = import.meta.env.VITE_MOCK === '1'
 
 export const api: Api = usingMock ? mockApi : realApi
 
-/** 五页与角标共用的缓存键。SSE 广播「变了」时整棵失效。 */
+/** 各页与角标的缓存键。SSE 广播「变了」时整棵失效。 */
 export const queryKeys = {
   items: ['items'] as const,
   item: (id: string) => ['items', id] as const,
   now: ['now'] as const,
   recent: ['recent'] as const,
+  agenda: ['agenda'] as const,
   projects: ['projects'] as const,
   project: (id: string) => ['projects', id] as const,
-  pending: ['pending'] as const,
+  confirmations: ['confirmations'] as const,
+  thoughts: ['thoughts'] as const,
 }

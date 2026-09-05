@@ -13,8 +13,8 @@ import { Empty } from './State.tsx'
  * 不是「模型没把握」。
  */
 export function PendingOverlay({ onClose }: { onClose: () => void }) {
-  const { data } = useQuery({ queryKey: queryKeys.items, queryFn: api.listItems })
-  const pending = data?.items.filter((i) => i.status === 'needs_confirm') ?? []
+  const { data } = useQuery({ queryKey: queryKeys.confirmations, queryFn: api.listConfirmations })
+  const pending = data?.items ?? []
 
   return (
     <div className="overlay-scrim" onClick={onClose}>

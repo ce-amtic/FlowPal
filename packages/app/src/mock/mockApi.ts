@@ -1,8 +1,8 @@
 import type { Api } from '../api.ts'
-import { DROPS, ITEMS, NOW, PROJECT_DETAILS, PROJECTS } from './data.ts'
+import { AGENDA, ITEMS, NOW, PROJECTS, PROJECT_CARDS, RECENT } from './data.ts'
 
 /**
- * 样例模式下的接口实现。它和真实实现共用同一个 Api 类型——接口形状一变，
+ * 样例模式下的接口实现。它和真实实现共用同一个 Api 类型——语义层的形状一变，
  * 这里编译不过，所以样例数据不会悄悄落后于契约。
  *
  * 写操作不落任何地方：样例模式是用来对版式的，不是用来试流程的。
@@ -29,31 +29,31 @@ export const mockApi: Api = {
 
   getNow: () => delay(NOW),
 
-  listRecent: () => delay({ drops: DROPS }),
+  listRecent: () => delay({ recent: RECENT }),
 
-  listProjects: () =>
-    delay({ projects: PROJECTS, unassigned: ITEMS.filter(
-        (i) => i.projectId === null && i.type !== 'thought' && i.status === 'active',
-      ) }),
+  getAgenda: () => delay(AGENDA),
+
+  listProjects: () => delay({
+    projects: PROJECT_CARDS,
+    unclassified: ITEMS.filter(
+      (i) => i.projectId === null && i.type !== 'thought' && i.status === 'active',
+    ),
+  }),
 
   getProject: (id) => {
-    const detail = PROJECT_DETAILS[id]
-    if (detail) return delay(detail)
-
     const project = PROJECTS.find((p) => p.id === id)
     if (!project) return Promise.reject(new Error(`样例数据里没有项目 ${id}`))
-
-    const mine = ITEMS.filter((i) => i.projectId === id)
-    return delay({
-      project,
-      upcoming: mine.filter((i) => i.status === 'active' && (i.startsAt ?? i.dueAt)),
-      todo: mine.filter((i) => i.status === 'active' && !i.startsAt && !i.dueAt),
-      done: mine.filter((i) => i.status === 'done'),
-      said: [],
-    })
+    return delay({ project, items: ITEMS.filter((i) => i.projectId === id) })
   },
 
-  listPending: () => delay({ items: ITEMS.filter((i) => i.status === 'needs_confirm') }),
+  listConfirmations: () => {
+    const items = ITEMS.filter((i) => i.status === 'needs_confirm')
+    return delay({ items, count: items.length })
+  },
+
+  listThoughts: () => delay({
+    thoughts: ITEMS.filter((i) => i.type === 'thought' && i.status === 'active'),
+  }),
 
   serverUrl: '',
 }

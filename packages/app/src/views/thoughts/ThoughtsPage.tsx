@@ -14,14 +14,14 @@ import './thoughts.css'
  */
 export function ThoughtsPage() {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: queryKeys.items,
-    queryFn: api.listItems,
+    queryKey: queryKeys.thoughts,
+    queryFn: api.listThoughts,
   })
 
   if (isLoading) return <Loading />
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />
 
-  const days = groupByDay(data?.items ?? [])
+  const days = groupByDay(data?.thoughts ?? [])
   if (days.length === 0) return <Empty>还没有想法。</Empty>
 
   return (
@@ -47,7 +47,6 @@ function groupByDay(items: ItemWithSources[]): [string, ItemWithSources[]][] {
   const byDay = new Map<string, ItemWithSources[]>()
 
   for (const item of items) {
-    if (item.type !== 'thought' || item.status === 'dropped') continue
     const day = item.createdAt.slice(0, 10)
     const bucket = byDay.get(day)
     if (bucket) bucket.push(item)

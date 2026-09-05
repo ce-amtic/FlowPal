@@ -1,52 +1,56 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api, queryKeys, type ItemWithSources } from '../../api.ts'
+import { api, queryKeys, type AgendaEntry } from '../../api.ts'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
-import { daysBetween, formatAt, formatDayLabel, formatDue, formatRrule } from '../../lib/format.ts'
+import { formatAt, formatDayLabel, formatDue, formatRrule } from '../../lib/format.ts'
 import './agenda.css'
 
 /**
  * 日程——纵向按天的轴，不是月历格子。
  *
  * 月历给每天同样的面积，而用户只关心接下来几天；十几条数据填不满格子，看起来
- * 是空的。没有内容的天直接跳过。
+ * 是空的。分组与筛选都在语义层做好了，这里只负责呈现。
  *
- * 重复项压成每天顶上一条细带，不占条目的位置——否则同步完课表，真正的节点
- * 全被每周重复的课淹掉。
+ * 重复项不占某一天，压成每天顶上一条细带——否则同步完课表，真正的节点全被
+ * 每周重复的课淹掉。
  */
 export function AgendaPage() {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: queryKeys.items,
-    queryFn: api.listItems,
+    queryKey: queryKeys.agenda,
+    queryFn: api.getAgenda,
   })
 
   if (isLoading) return <Loading />
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />
 
-  const days = groupByDay(data?.items ?? [])
-  if (days.length === 0) return <Empty>接下来没有安排。</Empty>
+  const days = data?.days ?? []
+  const recurring = data?.recurring ?? []
+
+  if (days.length === 0 && recurring.length === 0) {
+    return <Empty>接下来没有安排。</Empty>
+  }
 
   return (
     <div className="agenda">
-      {days.map(([day, { repeating, once }]) => (
+      {recurring.length > 0 && (
+        <p className="day-band">
+          {recurring.map(({ item }) => (
+            <span key={item.id}>
+              {item.title}
+              {item.rrule && `（${formatRrule(item.rrule)}）`}
+            </span>
+          ))}
+        </p>
+      )}
+
+      {days.map(({ day, items }) => (
         <section key={day} className="day">
           <h2 className="day-label">{formatDayLabel(day)}</h2>
-
-          {repeating.length > 0 && (
-            <p className="day-band">
-              {repeating.map((i) => (
-                <span key={i.id}>
-                  {i.startsAt ? `${formatAt(i.startsAt, i.datePrecision)} ` : ''}{i.title}
-                </span>
-              ))}
-            </p>
-          )}
-
           <ul className="plain-list">
-            {once.map((item) => (
-              <li key={item.id} className="agenda-row">
-                <Link to={`/items/${item.id}`}>{item.title}</Link>
-                <span className="agenda-meta">{meta(item)}</span>
+            {items.map((entry) => (
+              <li key={entry.item.id} className="agenda-row">
+                <Link to={`/items/${entry.item.id}`}>{entry.item.title}</Link>
+                <span className="agenda-meta">{meta(entry)}</span>
               </li>
             ))}
           </ul>
@@ -56,7 +60,7 @@ export function AgendaPage() {
   )
 }
 
-function meta(item: ItemWithSources): string {
+function meta({ item, project }: AgendaEntry): string {
   const parts: string[] = []
   const at = item.startsAt ?? item.dueAt
   if (at) {
@@ -65,43 +69,7 @@ function meta(item: ItemWithSources): string {
   }
   if (item.location) parts.push(item.location)
   if (item.dueAt) parts.push(formatDue(item.dueAt))
+  if (project?.name) parts.push(project.name)
   if (item.confidence === 'medium') parts.push('猜的')
   return parts.join(' · ')
-}
-
-type Day = { repeating: ItemWithSources[]; once: ItemWithSources[] }
-
-/**
- * 只有带时间的条目上轴。没有时间的东西在项目页与想法页，不在这里凑数。
- * 过去的天不显示——这一页回答的是「接下来」。
- */
-function groupByDay(items: ItemWithSources[]): [string, Day][] {
-  const today = new Date()
-  const byDay = new Map<string, Day>()
-
-  for (const item of items) {
-    // 待确认的还不算数，它们的落点是角标那个浮层，不是这条轴
-    if (item.status !== 'active') continue
-    const at = item.startsAt ?? item.dueAt
-    if (!at) continue
-    if (daysBetween(today, new Date(at)) < 0) continue
-
-    const day = at.slice(0, 10)
-    const bucket = byDay.get(day) ?? { repeating: [], once: [] }
-    if (item.rrule) bucket.repeating.push(item)
-    else bucket.once.push(item)
-    byDay.set(day, bucket)
-  }
-
-  return [...byDay.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([day, d]) => [day, {
-      repeating: d.repeating.map(withRruleLabel),
-      once: d.once,
-    }] as [string, Day])
-}
-
-/** 细带上显示的是「每周三」这类人话，不是 RFC 5545 的串 */
-function withRruleLabel(item: ItemWithSources): ItemWithSources {
-  return { ...item, title: `${item.title}（${formatRrule(item.rrule!)}）` }
 }

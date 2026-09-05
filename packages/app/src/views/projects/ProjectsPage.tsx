@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { api, queryKeys } from '../../api.ts'
 import { transition } from '../../tokens/motion.ts'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
+import { formatDay } from '../../lib/format.ts'
 import './projects.css'
 
 /**
@@ -23,20 +24,20 @@ export function ProjectsPage() {
   if (isLoading) return <Loading />
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />
 
-  const projects = data?.projects ?? []
-  const unassigned = data?.unassigned ?? []
+  const cards = data?.projects ?? []
+  const unclassified = data?.unclassified ?? []
 
-  if (projects.length === 0 && unassigned.length === 0) {
+  if (cards.length === 0 && unclassified.length === 0) {
     return <Empty>还没有项目。同步课表之后，每门课会成为一个。</Empty>
   }
 
   return (
     <>
-      {unassigned.length > 0 && (
-        <section className="unassigned">
+      {unclassified.length > 0 && (
+        <section className="group">
           <h2 className="group-label">未归类</h2>
           <ul className="plain-list">
-            {unassigned.map((item) => (
+            {unclassified.map((item) => (
               <li key={item.id}>
                 <Link to={`/items/${item.id}`}>{item.title}</Link>
               </li>
@@ -46,14 +47,28 @@ export function ProjectsPage() {
       )}
 
       <ul className="project-list">
-        {projects.map((p) => (
-          <motion.li layout key={p.id} transition={transition.base}>
-            <Link to={`/projects/${p.id}`} className="card project-card">
+        {cards.map((card) => (
+          <motion.li layout key={card.project.id} transition={transition.base}>
+            <Link to={`/projects/${card.project.id}`} className="card project-card">
               <div className="project-head">
-                <span className="project-name">{p.name}</span>
-                <span className="idle">{idleLabel(p.idleDays)}</span>
+                <span className="project-name">{card.project.name}</span>
+                <span className="idle">{idleLabel(card.idleDays)}</span>
               </div>
-              {p.statusNote && <p className="project-note">{p.statusNote}</p>}
+
+              {card.project.statusNote && <p className="project-note">{card.project.statusNote}</p>}
+
+              {card.next.length > 0 && (
+                <p className="project-next">
+                  {card.next.map((n) => (
+                    <span key={n.id}>{formatDay(n.at)} {n.title}</span>
+                  ))}
+                </p>
+              )}
+
+              <p className="project-counts">
+                {card.unfinished > 0 && <span>未完成 {card.unfinished}</span>}
+                {card.done > 0 && <span>已完成 {card.done}</span>}
+              </p>
             </Link>
           </motion.li>
         ))}
