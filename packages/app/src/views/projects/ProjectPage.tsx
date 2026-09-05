@@ -37,11 +37,9 @@ export function ProjectPage() {
 
   return (
     <>
-      <div className="project-title">
-        <h1 className="page-title">{project.name}</h1>
-      </div>
+      <h1 className="page-title">{project.name}</h1>
 
-      {project.statusNote && <p className="project-note project-lead">{project.statusNote}</p>}
+      {project.statusNote && <p className="project-lead">{project.statusNote}</p>}
 
       <Group label="接下来" items={upcoming} withDate />
       <Group label="未完成" items={todo} />
@@ -53,8 +51,10 @@ export function ProjectPage() {
           <ul className="plain-list">
             {said.map((s) => (
               <li key={s.id}>
-                <span className="stamp">{formatDay(s.createdAt)}</span>
-                {s.title}
+                <Link className="row" to={`/items/${s.id}`}>
+                  <span className="stamp">{formatDay(s.createdAt)}</span>
+                  <span className="row-title">{s.title}</span>
+                </Link>
               </li>
             ))}
           </ul>
@@ -77,12 +77,14 @@ function Group({
           const at = item.startsAt ?? item.dueAt
           return (
             <li key={item.id}>
-              {withDate && at && (
-                <span className="stamp">
-                  {formatDay(at)} {formatAt(at, item.datePrecision)}
-                </span>
-              )}
-              <Link to={`/items/${item.id}`}>{item.title}</Link>
+              <Link className="row" to={`/items/${item.id}`}>
+                {withDate && at && (
+                  <span className="stamp">
+                    {formatDay(at)} {formatAt(at, item.datePrecision)}
+                  </span>
+                )}
+                <span className="row-title">{item.title}</span>
+              </Link>
             </li>
           )
         })}

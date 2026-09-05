@@ -1,5 +1,5 @@
 import type { Api } from '../api.ts'
-import { AGENDA, ITEMS, NOW, PROJECTS, PROJECT_CARDS, RECENT } from './data.ts'
+import { AGENDA, FRAGMENTS, HISTORY, ITEMS, NOW, PROJECTS, PROJECT_CARDS, RECENT } from './data.ts'
 
 /**
  * 样例模式下的接口实现。它和真实实现共用同一个 Api 类型——语义层的形状一变，
@@ -16,13 +16,13 @@ export const mockApi: Api = {
   getItem: (id) => {
     const item = ITEMS.find((i) => i.id === id)
     if (!item) return Promise.reject(new Error(`样例数据里没有条目 ${id}`))
-    return delay({ item, history: [] })
+    return delay({ item, history: HISTORY[id] ?? [] })
   },
 
   getFragment: (id) => {
-    const entry = RECENT.find((r) => r.fragment.id === id)
-    if (!entry) return Promise.reject(new Error(`样例数据里没有碎片 ${id}`))
-    return delay({ fragment: entry.fragment })
+    const fragment = FRAGMENTS.find((f) => f.id === id)
+    if (!fragment) return Promise.reject(new Error(`样例数据里没有碎片 ${id}`))
+    return delay({ fragment })
   },
 
   patchItem: (id) => {

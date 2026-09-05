@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Image, FileText, Mic, CalendarDays } from 'lucide-react'
 import { api, queryKeys, type RecentEntry } from '../../api.ts'
 import { ICON } from '../../tokens/icons.ts'
+import { DayLabel } from '../../shell/DayLabel.tsx'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
-import { formatDayLabel, formatTime } from '../../lib/format.ts'
+import { formatTime } from '../../lib/format.ts'
 import './recent.css'
 
 /**
@@ -33,7 +34,7 @@ export function RecentPage() {
     <>
       {days.map(([day, entries]) => (
         <section key={day} className="day">
-          <h2 className="day-label">{formatDayLabel(day)}</h2>
+          <DayLabel day={day} />
           <ul className="drops">
             {entries.map((entry) => <Drop key={entry.fragment.id} entry={entry} />)}
           </ul>
@@ -51,25 +52,31 @@ function Drop({ entry: { fragment, run, items } }: { entry: RecentEntry }) {
       <div className="drop-head">
         <span className="stamp">{formatTime(fragment.createdAt)}</span>
         <SourceIcon rawType={fragment.rawType} />
-        <span className="drop-raw">{summarise(fragment.rawText, fragment.rawType)}</span>
+        <span className="drop-raw">{oneLine(fragment.rawText, fragment.rawType)}</span>
       </div>
 
-      {items.length > 0 && (
-        <ul className="drop-out">
-          {items.map((item) => (
-            <li key={item.id}>
-              <Link to={`/items/${item.id}`}>{item.title}</Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="drop-body">
+        {items.length > 0 && (
+          <ul className="plain-list">
+            {items.map((item) => (
+              <li key={item.id}>
+                <Link className="row" to={`/items/${item.id}`}>
+                  <span className="row-title">{item.title}</span>
+                  {item.status === 'needs_confirm' && <span className="row-meta">待确认</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
 
-      {items.length === 0 && run?.message && (
-        <p className="drop-note">
-          {run.message}
-          {failed && <button className="quiet">重试</button>}
-        </p>
-      )}
+        {/* 零条与失败都要说话：没有落点的投放，看起来和「坏了」一模一样 */}
+        {items.length === 0 && run?.message && (
+          <p className={failed ? 'drop-note drop-failed' : 'drop-note'}>
+            {run.message}
+            {failed && <button className="quiet">重试</button>}
+          </p>
+        )}
+      </div>
     </li>
   )
 }
@@ -100,8 +107,15 @@ function SourceIcon({ rawType }: { rawType: string }) {
   return <FileText {...props} />
 }
 
-function summarise(rawText: string | null, rawType: string): string {
-  if (rawText) return rawText.length > 42 ? `${rawText.slice(0, 42)}…` : rawText
+/**
+ * 投放进来的东西，压成一行。
+ *
+ * 换行符换成空格，超出的部分由 CSS 截断——按字数截会在窗口宽的时候留下一截
+ * 空白，按宽度截才总是正好一行。
+ */
+function oneLine(rawText: string | null, rawType: string): string {
+  const text = rawText?.replace(/\s+/g, ' ').trim()
+  if (text) return text
   if (rawType === 'image') return '一张图片'
   if (rawType === 'audio') return '一段语音'
   if (rawType === 'structured') return '一次同步'

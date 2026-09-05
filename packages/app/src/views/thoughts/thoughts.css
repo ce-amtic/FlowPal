@@ -1,12 +1,2 @@
-.thought {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-}
-
-.thought a {
-  color: var(--fg);
-  text-decoration: none;
-}
-
-.thought a:hover { color: var(--accent); }
+/* 想法只有时刻和一句话，时刻窄一点，让那句话尽量早地开始 */
+.thought .stamp { min-width: 40px; }

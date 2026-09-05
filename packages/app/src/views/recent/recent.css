@@ -1,15 +1,15 @@
 .drops {
   list-style: none;
-  margin: var(--space-4) 0 0;
+  margin: 0;
   padding: 0;
 }
 
-.drop { padding: var(--space-4) 0; }
+.drop + .drop { margin-top: var(--space-5); }
 
 /* 原文可能换行，所以时刻与图标对齐首行，不居中 */
 .drop-head {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   gap: var(--space-2);
   color: var(--fg-dim);
   font-size: var(--text-aux);
@@ -17,36 +17,34 @@
 
 .drop-icon {
   flex: 0 0 auto;
-  margin-top: var(--space-1);
+  align-self: center;
 }
 
+/* 投放进来的那句原话是这一行的主语，用正文色。超出的部分截掉，永远只占一行 */
 .drop-raw {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--fg);
   font-size: var(--text-body);
+  line-height: var(--leading-tight);
 }
 
-/* 产出用一条细线挂在投放下面，看得出从属关系而不需要边框 */
-.drop-out {
-  list-style: none;
-  margin: var(--space-2) 0 0;
-  padding: 0 0 0 var(--space-4);
-  border-left: 1px solid var(--line);
-  margin-left: var(--space-5);
+/* 产出缩进到原文的第一个字下面，从属关系靠对齐表明，不用线也不用框 */
+.drop-body {
+  padding-left: calc(var(--space-6) + var(--space-4));
 }
-
-.drop-out li { padding: var(--space-1) 0; }
-
-.drop-out a {
-  color: var(--fg);
-  text-decoration: none;
-}
-
-.drop-out a:hover { color: var(--accent); }
 
 .drop-note {
-  margin: var(--space-2) 0 0 calc(var(--space-5) + var(--space-4));
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2) 0;
   color: var(--fg-dim);
   font-size: var(--text-aux);
 }
 
+/* 失败要看得出是失败，但不必红成一片警告：原文已经存住了 */
+.drop-failed { color: var(--danger); }
+
 .drop-note button { margin-left: var(--space-3); }
+.drop-failed button { color: var(--danger); }

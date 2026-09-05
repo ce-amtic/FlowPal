@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { Repeat } from 'lucide-react'
 import { api, queryKeys, type AgendaEntry } from '../../api.ts'
+import { ICON } from '../../tokens/icons.ts'
+import { DayLabel } from '../../shell/DayLabel.tsx'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
-import { formatAt, formatDayLabel, formatDue, formatRrule } from '../../lib/format.ts'
+import { formatAt, formatDue, formatRrule } from '../../lib/format.ts'
 import './agenda.css'
 
 /**
@@ -11,8 +14,8 @@ import './agenda.css'
  * 月历给每天同样的面积，而用户只关心接下来几天；十几条数据填不满格子，看起来
  * 是空的。分组与筛选都在语义层做好了，这里只负责呈现。
  *
- * 重复项不占某一天，压成每天顶上一条细带——否则同步完课表，真正的节点全被
- * 每周重复的课淹掉。
+ * 重复项不占某一天，压成顶上一条细带——否则同步完课表，真正的节点全被每周
+ * 重复的课淹掉。
  */
 export function AgendaPage() {
   const { data, isLoading, error, refetch } = useQuery({
@@ -33,11 +36,12 @@ export function AgendaPage() {
   return (
     <div className="agenda">
       {recurring.length > 0 && (
-        <p className="day-band">
+        <p className="recurring">
+          <Repeat size={ICON.sizeSmall} strokeWidth={ICON.stroke} />
           {recurring.map(({ item }) => (
             <span key={item.id}>
               {item.title}
-              {item.rrule && `（${formatRrule(item.rrule)}）`}
+              {item.rrule && ` · ${formatRrule(item.rrule)}`}
             </span>
           ))}
         </p>
@@ -45,12 +49,14 @@ export function AgendaPage() {
 
       {days.map(({ day, items }) => (
         <section key={day} className="day">
-          <h2 className="day-label">{formatDayLabel(day)}</h2>
+          <DayLabel day={day} />
           <ul className="plain-list">
             {items.map((entry) => (
-              <li key={entry.item.id} className="agenda-row">
-                <Link to={`/items/${entry.item.id}`}>{entry.item.title}</Link>
-                <span className="agenda-meta">{meta(entry)}</span>
+              <li key={entry.item.id}>
+                <Link className="row" to={`/items/${entry.item.id}`}>
+                  <span className="row-title">{entry.item.title}</span>
+                  <span className="row-meta">{meta(entry)}</span>
+                </Link>
               </li>
             ))}
           </ul>

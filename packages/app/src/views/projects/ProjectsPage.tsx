@@ -33,37 +33,27 @@ export function ProjectsPage() {
 
   return (
     <>
-      {unclassified.length > 0 && (
-        <section className="group">
-          <h2 className="group-label">未归类</h2>
-          <ul className="plain-list">
-            {unclassified.map((item) => (
-              <li key={item.id}>
-                <Link to={`/items/${item.id}`}>{item.title}</Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       <ul className="project-list">
         {cards.map((card) => (
           <motion.li layout key={card.project.id} transition={transition.base}>
-            <Link to={`/projects/${card.project.id}`} className="card project-card">
+            <Link to={`/projects/${card.project.id}`} className="project-row">
               <div className="project-head">
                 <span className="project-name">{card.project.name}</span>
                 <span className="idle">{idleLabel(card.idleDays)}</span>
               </div>
 
-              {card.project.statusNote && <p className="project-note">{card.project.statusNote}</p>}
-
               {card.next.length > 0 && (
                 <p className="project-next">
                   {card.next.map((n) => (
-                    <span key={n.id}>{formatDay(n.at)} {n.title}</span>
+                    <span key={n.id}>
+                      <span className="stamp">{formatDay(n.at)}</span>
+                      {n.title}
+                    </span>
                   ))}
                 </p>
               )}
+
+              {card.project.statusNote && <p className="project-note">{card.project.statusNote}</p>}
 
               <p className="project-counts">
                 {card.unfinished > 0 && <span>未完成 {card.unfinished}</span>}
@@ -73,6 +63,22 @@ export function ProjectsPage() {
           </motion.li>
         ))}
       </ul>
+
+      {/* 未归类排在项目后面：它是常态，不是需要先清掉的收件箱 */}
+      {unclassified.length > 0 && (
+        <section className="group unclassified">
+          <h2 className="group-label">未归类</h2>
+          <ul className="plain-list">
+            {unclassified.map((item) => (
+              <li key={item.id}>
+                <Link className="row" to={`/items/${item.id}`}>
+                  <span className="row-title">{item.title}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   )
 }

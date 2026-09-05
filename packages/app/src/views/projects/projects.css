@@ -1,35 +1,27 @@
-.unassigned { margin-bottom: var(--space-8); }
-
-.group { margin-bottom: var(--space-6); }
-
-.group-label {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-aux);
-  font-weight: 400;
-  color: var(--fg-dim);
-}
-
 .project-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: var(--space-3);
 }
 
-/* 项目是可以整体点开的对象，所以它是卡片；条目行不是 */
-.project-card {
+/*
+ * 项目是一行，不是一张卡片。
+ *
+ * 四张同样大小的白盒子摞起来，读到的是「有四个格子」，不是「有四件事在推进」；
+ * 而卡片留给此刻那一件之后，这一页也不该再有第二种卡片。可点性由悬停的浅底
+ * 表明，内部层级由字号与颜色分，不靠盒子的边界分。
+ */
+.project-row {
   display: block;
+  margin: 0 calc(var(--space-4) * -1);
   padding: var(--space-4);
   border-radius: var(--radius-box);
-  background: var(--card);
-  box-shadow: var(--card-shadow);
   color: inherit;
   text-decoration: none;
   transition: background var(--dur-fast) var(--ease);
 }
 
-.project-card:hover { background: var(--card-hover); }
+.project-row:hover { background: var(--row-hover); }
 
 .project-head {
   display: flex;
@@ -38,7 +30,10 @@
   gap: var(--space-4);
 }
 
-.project-name { font-size: var(--text-lead); }
+.project-name {
+  font-size: var(--text-lead);
+  line-height: var(--leading-tight);
+}
 
 /* 「多久没动」是这一页的核心，但语气要平——它是事实，不是责备 */
 .idle {
@@ -47,28 +42,43 @@
   font-size: var(--text-aux);
 }
 
-.project-note {
+/* 接下来那一件用正文色：它是这一行里唯一可以立刻动手的东西 */
+.project-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-2) 0 0;
+}
+
+.project-next > span {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.project-next .stamp { min-width: 0; }
+
+/* 用户自己说过的那句话，与计数同级，但它是真话，所以不加引号也不缩写 */
+.project-note,
+.project-counts {
   margin: var(--space-2) 0 0;
   color: var(--fg-dim);
   font-size: var(--text-aux);
 }
 
-.project-next,
 .project-counts {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
-  margin: var(--space-2) 0 0;
+}
+
+/* ── 详情页 ─────────────────────────────────────────────── */
+
+/* 顶部那句状态，和下面第一组之间要有呼吸 */
+.project-lead {
+  margin: calc(var(--space-4) * -1) 0 var(--space-8);
   color: var(--fg-dim);
-  font-size: var(--text-aux);
 }
 
-/* 详情页顶部那句状态，和下面第一组之间要有呼吸 */
-.project-lead { margin-bottom: var(--space-6); }
-
-.project-title {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
+/* 未归类跟在项目后面，中间要有一段明显的空——它不属于上面那一列 */
+.unclassified { margin-top: var(--space-10); }

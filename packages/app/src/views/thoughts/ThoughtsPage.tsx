@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api, queryKeys, type ItemWithSources } from '../../api.ts'
+import { DayLabel } from '../../shell/DayLabel.tsx'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
-import { formatDayLabel, formatTime } from '../../lib/format.ts'
+import { formatTime } from '../../lib/format.ts'
 import './thoughts.css'
 
 /**
@@ -28,12 +29,14 @@ export function ThoughtsPage() {
     <div className="thoughts">
       {days.map(([day, thoughts]) => (
         <section key={day} className="day">
-          <h2 className="day-label">{formatDayLabel(day)}</h2>
+          <DayLabel day={day} />
           <ul className="plain-list">
             {thoughts.map((t) => (
-              <li key={t.id} className="thought">
-                <span className="stamp">{formatTime(t.createdAt)}</span>
-                <Link to={`/items/${t.id}`}>{t.title}</Link>
+              <li key={t.id}>
+                <Link className="row thought" to={`/items/${t.id}`}>
+                  <span className="stamp">{formatTime(t.createdAt)}</span>
+                  <span className="row-title">{t.title}</span>
+                </Link>
               </li>
             ))}
           </ul>

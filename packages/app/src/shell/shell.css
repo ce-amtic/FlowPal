@@ -157,19 +157,59 @@ body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
 
 /* ── 列表与字段 ─────────────────────────────────────────── */
 
-.day { margin-bottom: var(--space-6); }
-
-.day-label {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-aux);
-  font-weight: 400;
-  color: var(--fg-dim);
+/*
+ * 一行可以点开的东西。日程、想法、项目、投放产出全都用它——同一个语义的操作
+ * 必须长成同一个样子。可点性靠悬停时的一层浅底表明，不用边框，也不用把每一行
+ * 都做成卡片：一屏堆四张卡片就是一块看不出重点的板。
+ *
+ * 负外边距让浅底比文字宽出一截，行与行之间才不会看起来贴着。
+ */
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0 calc(var(--space-3) * -1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-box);
+  color: var(--fg);
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease);
 }
 
+a.row:hover { background: var(--row-hover); }
+
+.row-title { flex: 1 1 auto; min-width: 0; }
+
+/* 行尾的次要信息：时间、地点、项目。它不参与换行竞争 */
+.row-meta {
+  flex: 0 0 auto;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.day { margin-bottom: var(--space-8); }
+
+/*
+ * 日期是这几页的骨架。日期本身用正文色，星期与「今天」用弱色——同一行里
+ * 分出两级，比整行灰掉再靠位置去猜要清楚。
+ */
+.day-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-aux);
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.day-label span { color: var(--fg-dim); }
+
+/* 时间戳自成一列。宽度要容得下「12月10日」，否则日期列参差不齐 */
 .stamp {
   display: inline-block;
-  min-width: 48px;
-  padding-right: var(--space-2);
+  flex: 0 0 auto;
+  min-width: 60px;
   color: var(--fg-dim);
   font-size: var(--text-aux);
 }
@@ -220,7 +260,8 @@ body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
   padding: 0;
 }
 
-.plain-list li { padding: var(--space-2) 0; }
+/* 行的上下留白由 .row 自己给；列表再加一层，行与行之间会散开成一片 */
+.plain-list li:not(:has(> .row)) { padding: var(--space-2) 0; }
 
 .plain-list a {
   color: var(--fg);
@@ -248,7 +289,8 @@ body.in-electron .titlebar { padding-left: var(--traffic-lights-w); }
   gap: var(--space-3);
 }
 
-button.quiet {
+/* 次要动作。按钮和链接都用它——同一个分量的操作长成同一个样子 */
+.quiet {
   border: 0;
   padding: 0;
   background: none;
@@ -259,8 +301,19 @@ button.quiet {
   transition: color var(--dur-fast) var(--ease);
 }
 
-button.quiet:hover { color: var(--fg); }
-button.quiet:disabled { cursor: default; opacity: 0.5; }
+.quiet:hover { color: var(--fg); }
+.quiet:disabled { cursor: default; opacity: 0.5; }
+
+/* ── 分组 ───────────────────────────────────────────────── */
+
+.group { margin-bottom: var(--space-8); }
+
+.group-label {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-aux);
+  font-weight: 400;
+  color: var(--fg-dim);
+}
 
 .state-error button {
   margin-top: var(--space-2);

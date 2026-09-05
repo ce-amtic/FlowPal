@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, queryKeys, type Citation, type Fragment, type ItemWithSources } from '../../api.ts'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
-import { formatAt, formatDay, formatDue, formatRrule } from '../../lib/format.ts'
+import { formatAt, formatDay, formatDue, formatRrule, formatTime } from '../../lib/format.ts'
 import './item.css'
 
 const TYPE_LABEL: Record<string, string> = {
@@ -86,8 +86,11 @@ export function ItemPage() {
             {history.map((h) => (
               <li key={h.id} className="history-row">
                 <span className="stamp">{formatDay(h.changed_at)}</span>
-                {describe(h.field)}：{h.old_value ?? '空'} → {h.new_value ?? '空'}
-                <span className="history-actor">{ACTOR[h.actor] ?? h.actor}</span>
+                <span className="row-title">
+                  {FIELD_LABEL[h.field] ?? h.field}：
+                  {readable(h.field, h.old_value)} → {readable(h.field, h.new_value)}
+                </span>
+                <span className="row-meta">{ACTOR[h.actor] ?? h.actor}</span>
               </li>
             ))}
           </ul>
@@ -149,8 +152,14 @@ const ACTOR: Record<string, string> = {
   user: '你改的', llm: '理解出来的', merge: '合并带来的', sync: '同步带来的',
 }
 
-function describe(field: string): string {
-  return FIELD_LABEL[field] ?? field
+/** 库里存的是 ISO 串。时间字段直接打出来，用户读到的就是一行机器日志 */
+const DATE_FIELDS = new Set(['starts_at', 'due_at'])
+
+function readable(field: string, value: string | null): string {
+  if (value === null) return '空'
+  if (!DATE_FIELDS.has(field)) return value
+  const time = formatTime(value)
+  return time === '00:00' ? formatDay(value) : `${formatDay(value)} ${time}`
 }
 
 function timeParts(item: ItemWithSources): string[] {

@@ -1,14 +1,14 @@
 .now-head {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-6);
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin: var(--space-2) 0 var(--space-6);
 }
 
 /* 形象的位置。素材接进来之前先占住，避免版式后面整体挪一次 */
 .avatar {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   border-radius: var(--radius-pill);
   background: var(--accent-soft);
@@ -16,64 +16,66 @@
 
 .greeting {
   margin: 0;
+  font-size: var(--text-lead);
+  line-height: var(--leading-tight);
+}
+
+/* 模型对处境的那一句判断。它有凭据，所以它读得清 */
+.energy {
+  margin: var(--space-2) 0 0;
   color: var(--fg-dim);
 }
 
-/* 卡片只用于可以整体操作的对象。「此刻」这件事是其中之一 */
-.card {
-  padding: var(--space-5);
+/*
+ * 全 App 只有这里是一张真正的卡片：它托着此刻唯一要做的那件事。
+ * 别处再堆卡片，这一张就不再意味着「就这一件」。
+ */
+.now-card {
+  padding: var(--space-6);
   border-radius: var(--radius-box);
   background: var(--card);
   box-shadow: var(--card-shadow);
 }
 
+/* 这一句是全 App 最大的字。它是用户此刻唯一需要读进去的东西 */
 .now-step {
   margin: 0;
-  font-size: var(--text-lead);
-  line-height: var(--leading);
+  font-size: var(--text-display);
+  font-weight: 500;
+  line-height: var(--leading-tight);
 }
 
 .now-reason {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-3) 0 0;
   color: var(--fg-dim);
-  font-size: var(--text-aux);
 }
 
 .now-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  margin-top: var(--space-5);
+  gap: var(--space-5);
+  margin-top: var(--space-6);
 }
 
 button.primary {
   border: 0;
   border-radius: var(--radius-pill);
-  padding: var(--space-2) var(--space-5);
+  padding: var(--space-2) var(--space-6);
   background: var(--accent);
   color: var(--bg-solid);
   font: inherit;
+  font-size: var(--text-lead);
+  line-height: var(--leading-tight);
   cursor: pointer;
   transition: opacity var(--dur-fast) var(--ease);
 }
 
 button.primary:hover { opacity: 0.88; }
 
-.date-band {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  margin: var(--space-6) 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--text-aux);
-  color: var(--fg-dim);
+/* 出处入口挨着动作放，但推到最右：它是随时可查，不是下一步 */
+.now-open {
+  margin-left: auto;
+  text-decoration: none;
 }
 
-.date-band .stamp { min-width: 0; margin-right: var(--space-2); }
-
-.energy {
-  margin: var(--space-3) 0 0;
-  font-size: var(--text-aux);
-  color: var(--fg-faint);
-}
+.upcoming { margin-top: var(--space-10); }

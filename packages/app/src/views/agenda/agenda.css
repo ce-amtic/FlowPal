@@ -1,32 +1,18 @@
-/* 重复项压成一条细带：看得见，但不占条目的位置 */
-.day-band {
+/*
+ * 重复项压成顶上一条带：看得见，但不占某一天的位置。
+ *
+ * 图标说明它是重复的，省掉一个「每周」以外的解释词；带子本身不描边，只用一层
+ * 比正文浅的底把它和下面按天排的那些行分开。
+ */
+.recurring {
   display: inline-flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: 0 0 var(--space-2);
-  padding: var(--space-1) var(--space-3);
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-8);
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-pill);
   background: var(--field);
-  color: var(--fg-dim);
-  font-size: var(--text-aux);
-}
-
-.agenda-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.agenda-row a {
-  color: var(--fg);
-  text-decoration: none;
-}
-
-.agenda-row a:hover { color: var(--accent); }
-
-.agenda-meta {
-  flex: 0 0 auto;
   color: var(--fg-dim);
   font-size: var(--text-aux);
 }

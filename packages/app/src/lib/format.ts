@@ -11,13 +11,19 @@ export function formatDay(iso: string): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export function formatDayLabel(iso: string, today = new Date()): string {
+/**
+ * 分组标题上的日期，拆成两级：日期本身，与星期加「今天／明天」。
+ *
+ * 拆开是为了让日期用正文色、其余用弱色。整行灰掉的话，一列日期看上去一样重，
+ * 而在一页按天排下来的列表里，日期就是骨架。
+ */
+export function formatDayLabel(iso: string, today = new Date()): [string, string] {
   const d = new Date(iso)
   const days = daysBetween(today, d)
-  const base = `${formatDay(iso)} · ${WEEKDAYS[d.getDay()]}`
-  if (days === 0) return `今天 · ${base}`
-  if (days === 1) return `明天 · ${base}`
-  return base
+  const weekday = WEEKDAYS[d.getDay()]!
+  if (days === 0) return [formatDay(iso), `今天 · ${weekday}`]
+  if (days === 1) return [formatDay(iso), `明天 · ${weekday}`]
+  return [formatDay(iso), weekday]
 }
 
 export function formatTime(iso: string): string {

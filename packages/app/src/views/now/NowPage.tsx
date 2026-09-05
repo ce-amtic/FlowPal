@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { api, queryKeys } from '../../api.ts'
 import { transition } from '../../tokens/motion.ts'
 import { Empty, ErrorState, Loading } from '../../shell/State.tsx'
-import { formatDay } from '../../lib/format.ts'
+import { formatAt, formatDay, formatDue } from '../../lib/format.ts'
 import './now.css'
 
 /**
@@ -45,59 +45,88 @@ export function NowPage() {
 
   return (
     <div className="now">
-      <div className="now-head">
+      <header className="now-head">
         <div className="avatar" aria-hidden />
-        <p className="greeting">{greeting()}</p>
-      </div>
+        <div>
+          <p className="greeting">{greeting()}</p>
+          {/*
+            精力是模型对处境的那一句判断，凭据在它自己那句话里。它是这一页除了
+            那件事以外最重要的一行，所以不能是页面上最淡的字。
+          */}
+          {data.energy && <p className="energy">{data.energy}</p>}
+        </div>
+      </header>
 
       <motion.div layout transition={transition.base} className="card now-card">
-        <motion.p layout="position" key={step} className="now-step">{step}</motion.p>
-        <p className="now-reason">{candidate.reason}</p>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.p
+            key={step}
+            className="now-step"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={transition.fast}
+          >
+            {step}
+          </motion.p>
+        </AnimatePresence>
 
-        <div className="now-actions">
+        <motion.p layout="position" className="now-reason">{candidate.reason}</motion.p>
+
+        <motion.div layout="position" className="now-actions">
           <button className="primary" onClick={() => navigate('/focus')}>开始</button>
-          {hasOther && (
-            <button className="quiet" onClick={() => setPickIndex((i) => (i + 1) % candidates.length)}>
-              换一件
-            </button>
-          )}
           {hasSmaller && (
             <button className="quiet" onClick={() => setStepIndex((i) => i + 1)}>
               更小的一步
             </button>
           )}
-        </div>
+          {hasOther && (
+            <button className="quiet" onClick={() => setPickIndex((i) => (i + 1) % candidates.length)}>
+              换一件
+            </button>
+          )}
+          <Link className="quiet now-open" to={`/items/${candidate.itemId}`}>出处</Link>
+        </motion.div>
       </motion.div>
 
-      <DateBand />
-
-      {data.energy && <p className="energy">{data.energy}</p>}
+      <Upcoming />
     </div>
   )
 }
 
 /**
- * 底部那条日期带。它不是装饰，是「剩下的没丢」的凭据——只显示一件事而不给这个
- * 凭据，用户不敢信。取的是日程那份数据，不需要「此刻」的接口再返一遍。
+ * 底部那一小段接下来。它不是装饰，是「剩下的没丢」的凭据——只显示一件事而
+ * 不给这个凭据，用户不敢信。
+ *
+ * 取的是日程那份数据，不需要「此刻」的接口再返一遍。排成行而不是挤成一句：
+ * 一句话读下来，三个日期和三件事会粘在一起。
  */
-function DateBand() {
+function Upcoming() {
   const { data } = useQuery({ queryKey: queryKeys.agenda, queryFn: api.getAgenda })
 
   const upcoming = (data?.days ?? [])
-    .flatMap((d) => d.items.map((entry) => ({ day: d.day, title: entry.item.title })))
+    .flatMap((d) => d.items.map((entry) => ({ day: d.day, item: entry.item })))
     .slice(0, 4)
 
   if (upcoming.length === 0) return null
 
   return (
-    <ul className="date-band">
-      {upcoming.map((u) => (
-        <li key={`${u.day}-${u.title}`}>
-          <span className="stamp">{formatDay(u.day)}</span>
-          {u.title}
-        </li>
-      ))}
-    </ul>
+    <section className="upcoming">
+      <h2 className="group-label">接下来</h2>
+      <ul className="plain-list">
+        {upcoming.map(({ day, item }) => (
+          <li key={item.id}>
+            <Link className="row" to={`/items/${item.id}`}>
+              <span className="stamp">{formatDay(day)}</span>
+              <span className="row-title">{item.title}</span>
+              <span className="row-meta">
+                {item.dueAt ? formatDue(item.dueAt) : formatAt(item.startsAt ?? day, item.datePrecision)}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
