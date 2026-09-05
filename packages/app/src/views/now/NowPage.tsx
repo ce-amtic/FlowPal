@@ -7,6 +7,7 @@ import { api, queryKeys } from '../../api.ts'
 import { ICON } from '../../tokens/icons.ts'
 import { transition } from '../../tokens/motion.ts'
 import { ErrorState, Loading } from '../../shell/State.tsx'
+import { Pebble } from '../../pebble/Pebble.tsx'
 import { daysBetween, formatAt, formatDay, formatDue } from '../../lib/format.ts'
 import { Composer } from './Composer.tsx'
 import './now.css'
@@ -62,7 +63,7 @@ export function NowPage() {
         : undefined}
     >
       <header className="now-head">
-        <div className="avatar" aria-hidden />
+        <Pebble size={128} />
         <div className="now-greeting">
           <p className="greeting">{greeting()}</p>
           {/*

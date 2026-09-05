@@ -1,17 +1,12 @@
+/*
+ * 形象自带接触阴影，画布下缘那一截是阴影，不是身体。所以问候语按整块居中对齐，
+ * 顶对齐会让它看起来比形象高出一截。
+ */
 .now-head {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-  margin: var(--space-2) 0 var(--space-6);
-}
-
-/* 形象的位置。素材接进来之前先占住，避免版式后面整体挪一次 */
-.avatar {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-6);
 }
 
 .now-greeting { flex: 1 1 auto; min-width: 0; }

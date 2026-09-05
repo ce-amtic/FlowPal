@@ -1,0 +1,8 @@
+/* 画布本身不占额外的框：形体与它的接触阴影都画在这块方形里 */
+.pebble {
+  display: block;
+  flex: 0 0 auto;
+  /* 光标经过它不该变成文字选择的样子——它不是可以点的东西 */
+  pointer-events: none;
+  user-select: none;
+}
