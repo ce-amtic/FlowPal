@@ -1,0 +1,22 @@
+/* 设置。竖向节奏跟全 App 一致：问题与它的选项贴着，两个问题之间断开 */
+
+.settings-note {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+.settings-field {
+  margin-top: var(--space-5);
+}
+
+/* 这一问和它下面那排选项是同一件事的两行 */
+.settings-question {
+  margin: 0 0 var(--space-2);
+  color: var(--fg-dim);
+}
+
+/* 最后那句说明与上面那组选项之间要断开，它不属于任何一问 */
+.settings-field + .settings-note {
+  margin-top: var(--space-8);
+}

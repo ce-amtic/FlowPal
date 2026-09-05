@@ -313,6 +313,34 @@ a.row:hover { background: var(--row-hover); }
 .quiet:hover { color: var(--fg); }
 .quiet:disabled { cursor: default; opacity: 0.5; }
 
+/*
+ * 一排可点的选项。首次启动的两问和设置页共用——同一个问题在两处必须长成同一个
+ * 样子，各写一份迟早会长歪。
+ *
+ * 做成可点的选项而不是下拉或转盘：这两个答案只需要大概，点一下比调一个控件容易。
+ */
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.choice {
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  background: var(--field);
+  color: var(--fg-dim);
+  font: inherit;
+  line-height: var(--leading-tight);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.choice:hover { background: var(--field-focus); color: var(--fg); }
+.choice.picked { background: var(--accent-soft); color: var(--accent); }
+.choice:disabled { cursor: default; opacity: 0.4; }
+
 /* ── 分组 ───────────────────────────────────────────────── */
 
 .group { margin-bottom: var(--space-8); }

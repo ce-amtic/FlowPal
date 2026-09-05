@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, queryKeys } from '../../api.ts'
+import { CHRONOTYPE } from '../../lib/chronotype.ts'
 import { transition } from '../../tokens/motion.ts'
 import { Pebble } from '../../pebble/Pebble.tsx'
 import { ErrorState } from '../../shell/State.tsx'
@@ -10,16 +11,10 @@ import './welcome.css'
 /**
  * 首次启动。三屏：形象出场、两个问题、进去。
  *
- * 只问作息这两个，不问别的。它们是 MCTQ 那两道题，`buildContext` 直接读——不填的话
- * 「此刻」只能拿到「作息时间未知（先验，猜的）」。别的东西不该在这里问：产品的前提是
- * 用户只维护一份状态，开场先来一张表单等于一上来就违约。
- *
- * 答案是几个可点的时刻，不是时间选择器。第一次打开一个应用时，点一下比调一个转盘容易，
- * 而这两个数只需要大概。
+ * 只问作息这两个，不问别的。别的东西不该在这里问：产品的前提是用户只维护一份状态，
+ * 开场先来一张表单等于一上来就违约。这两问之后只在设置页里能改，两处共用同一份题目
+ * 与选项。
  */
-const WORKDAY = ['6:30 前', '7:00', '7:30', '8:00', '9:00', '更晚']
-const RESTDAY = ['8:00 前', '9:00', '10:00', '11:00', '12:00', '更晚']
-
 type Step = 'hello' | 'workday' | 'restday'
 
 export function WelcomePage() {
@@ -66,9 +61,9 @@ export function WelcomePage() {
         {step === 'workday' && (
           <Panel key="workday">
             <p className="welcome-step">第一个问题</p>
-            <h1 className="welcome-title">有课的那几天，你通常几点起？</h1>
+            <h1 className="welcome-title">{CHRONOTYPE.workday.question}</h1>
             <Choices
-              options={WORKDAY}
+              options={CHRONOTYPE.workday.options}
               onPick={(value) => { setWorkday(value); setStep('restday') }}
             />
             <p className="welcome-aside">大概就行。它用来估你一天里精力在哪个位置。</p>
@@ -78,9 +73,9 @@ export function WelcomePage() {
         {step === 'restday' && (
           <Panel key="restday">
             <p className="welcome-step">第二个问题</p>
-            <h1 className="welcome-title">没有课、也不用早起的那天呢？</h1>
+            <h1 className="welcome-title">{CHRONOTYPE.restday.question}</h1>
             <Choices
-              options={RESTDAY}
+              options={CHRONOTYPE.restday.options}
               disabled={finish.isPending}
               onPick={(value) => finish.mutate(value)}
             />
@@ -114,19 +109,14 @@ function Panel({ children }: { children: React.ReactNode }) {
 }
 
 function Choices({ options, onPick, disabled }: {
-  options: string[]
+  options: readonly string[]
   onPick: (value: string) => void
   disabled?: boolean
 }) {
   return (
-    <div className="welcome-choices">
+    <div className="choices welcome-choices">
       {options.map((option) => (
-        <button
-          key={option}
-          className="welcome-choice"
-          disabled={disabled}
-          onClick={() => onPick(option)}
-        >
+        <button key={option} className="choice" disabled={disabled} onClick={() => onPick(option)}>
           {option}
         </button>
       ))}

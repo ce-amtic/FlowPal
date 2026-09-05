@@ -61,29 +61,18 @@
   font-size: var(--text-aux);
 }
 
-/* 答案是一排可点的时刻。第一次打开一个应用时，点一下比调转盘容易 */
+/* 选项本身长什么样在 shell.css 里，和设置页共用一份。这里只管这一屏的排法 */
 .welcome-choices {
-  display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: var(--space-2);
   margin-top: var(--space-2);
 }
 
-.welcome-choice {
-  border: 0;
-  border-radius: var(--radius-pill);
+/*
+ * 这一屏上它是主角：比在设置页里大一号，字也是正常颜色。在设置页里它是一排
+ * 待选项，灰一点正好；在这里它是唯一要做的动作，灰着就没分量了。
+ */
+.welcome-choices .choice {
   padding: var(--space-3) var(--space-5);
-  background: var(--card);
   color: var(--fg);
-  font: inherit;
   font-size: var(--text-lead);
-  line-height: var(--leading-tight);
-  cursor: pointer;
-  box-shadow: var(--card-shadow);
-  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
-
-.welcome-choice:hover { background: var(--card-hover); transform: translateY(-1px); }
-.welcome-choice:active { transform: translateY(0); }
-.welcome-choice:disabled { cursor: default; opacity: 0.4; transform: none; }
