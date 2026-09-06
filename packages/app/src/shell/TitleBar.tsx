@@ -9,10 +9,12 @@ import { ICON } from '../tokens/icons.ts'
  * 没有它窗口挪不动。按钮周围要留足可拖动的空白。
  *
  * 五格是这条栏的上限。专注是动作不是页，设置与待确认是角落控件。
+ *
+ * 这四格讲的都是用户的世界。「最近」讲的是系统的账——每一次投放和它的产出——
+ * 那是出了岔子才去查的地方，不是每天要走的地方，所以它有路由没有格子。
  */
 const PAGES = [
   { to: '/now', label: '此刻' },
-  { to: '/recent', label: '最近' },
   { to: '/agenda', label: '日程' },
   { to: '/projects', label: '项目' },
   { to: '/thoughts', label: '想法' },

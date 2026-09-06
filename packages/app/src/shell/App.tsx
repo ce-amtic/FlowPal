@@ -106,6 +106,11 @@ export function App() {
               <Routes location={location}>
                 <Route path="/" element={<Navigate to="/now" replace />} />
                 <Route path="/now" element={<NowPage />} />
+                {/*
+                  「最近」不在导航里（见 TitleBar）。留着路由不是为了以后接回去，
+                  是因为它接的是「我明明扔进去了，怎么哪儿都找不着」——模型没读出
+                  日期的东西不进日程，归不进项目的不进项目，只有这一页看得见。
+                */}
                 <Route path="/recent" element={<RecentPage />} />
                 <Route path="/agenda" element={<AgendaPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
