@@ -60,10 +60,21 @@ export type NowPick = {
   steps: string[]
 }
 
+/** 今天剩下的时间的一段：固定的课原样落位，事务排进空隙，note 说为什么排在这里 */
+export type PlanSlot = {
+  start: string
+  end: string
+  kind: 'fixed' | 'task'
+  itemId: string
+  title: string
+  note: string
+}
+
 export type NowView = {
   primary: NowPick | null
   alternates: NowPick[]
   energy: string | null
+  plan: PlanSlot[]
   /** 这次输出用了哪些材料：条目 id，或逐字事实 */
   basis: string[]
 }

@@ -199,5 +199,41 @@ button.primary:hover { opacity: 0.88; }
 
 .upcoming { margin-top: var(--space-10); }
 
+/*
+ * 今天剩下的时间。时刻一列等宽对齐，右边是事情和它为什么在这里。
+ * 课那几行只是坐标，字色退一档；排进去的事务是可点的，和别处的条目一样。
+ */
+.day-plan { margin-top: var(--space-10); }
+
+.plan-slot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-height: var(--target-min);
+  padding: var(--space-2) 0;
+}
+
+.plan-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.plan-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.plan-title { color: var(--fg); text-decoration: none; }
+.plan-title:hover { color: var(--accent); }
+.plan-fixed .plan-title { color: var(--fg-dim); }
+
+.plan-note { color: var(--fg-dim); font-size: var(--text-aux); }
+
 /* 通向日程的那一行，语气要比条目更轻——它不是一件事 */
 .row-more { color: var(--fg-dim); font-size: var(--text-aux); }

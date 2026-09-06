@@ -253,7 +253,12 @@ export const NOW: NowView = {
       steps: ['把上次的模板复制一份', '只打开模板'],
     },
   ],
-  energy: '上午四节连堂上到中午，现在离你的高峰还有六个小时。',
+  energy: '上午四节连堂上到中午，午后这段会有点沉，先做点轻的。',
+  plan: [
+    { start: '13:30', end: '14:00', kind: 'task', itemId: 'i_mail', title: '把实习申请的材料交上去', note: '饭后做点不费脑的' },
+    { start: '15:00', end: '16:30', kind: 'task', itemId: 'i_resume', title: '把简历第二页的实习经历压到三行', note: '下午回过神来再改' },
+    { start: '18:00', end: '19:30', kind: 'fixed', itemId: 'i_seminar', title: '组会', note: '' },
+  ],
   basis: ['i_mail', 'i_midterm', '上午 8:00–12:00 连排四节'],
 }
 

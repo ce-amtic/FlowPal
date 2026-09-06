@@ -8,7 +8,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { Calendar, Run } from '@flowpal/shared'
 import {
   createCtx, nowInShanghai, occursOn, supportsRrule,
-  FragmentSource, RawType, NowChoice, NowOutput, nowJsonSchema,
+  FragmentSource, RawType, NowChoice, NowOutput, PlanSlot, nowJsonSchema,
   EndFocusRequest, SettingsPatch, StartFocusRequest, SyncRunRequest,
 } from '@flowpal/shared'
 import type { RucExternalSource } from '@flowpal/shared'
@@ -607,10 +607,18 @@ export function createRoutes(
         console.warn(`「此刻」丢弃了 ${candidates.length - alternates.length} 个不合契约的候选`)
       }
 
+      // 排程与备选同一个待遇：坏的一段丢掉，不让它拖垮首屏。
+      const slots = Array.isArray(shell.plan) ? shell.plan : []
+      const plan = slots.map((s) => PlanSlot.safeParse(s)).filter((r) => r.success).map((r) => r.data)
+      if (plan.length !== slots.length) {
+        console.warn(`「此刻」丢弃了 ${slots.length - plan.length} 段不合契约的排程`)
+      }
+
       const payload = {
         primary: primary.data,
         alternates,
         energy: typeof shell.energy_reading === 'string' ? shell.energy_reading || null : null,
+        plan,
         basis: Array.isArray(shell.basis) ? shell.basis.filter((b) => typeof b === 'string') : [],
       }
       setNowCache(db, ctx, JSON.stringify(payload))
@@ -1075,7 +1083,7 @@ export function createRoutes(
 }
 
 function emptyNow() {
-  return { primary: null, alternates: [], energy: null, basis: [] }
+  return { primary: null, alternates: [], energy: null, plan: [], basis: [] }
 }
 
 function isNowStale(createdAt: string, now: string): boolean {

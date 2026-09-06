@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, RefreshCw } from 'lucide-react'
-import { api, queryKeys } from '../../api.ts'
+import { api, queryKeys, type PlanSlot } from '../../api.ts'
 import { ICON } from '../../tokens/icons.ts'
 import { transition } from '../../tokens/motion.ts'
 import { ErrorState, Loading } from '../../shell/State.tsx'
@@ -178,10 +178,38 @@ export function NowPage() {
         「接下来」留在卡片后面：它是「剩下的没丢」的凭据，位置不能被说过的话挤走。
         对话追加在整页最末尾，新的一轮总在最下面。
       */}
+      <DayPlan plan={data?.plan ?? []} />
+
       <Upcoming />
 
       <Conversation turns={turns} onClear={() => setTurns([])} />
     </div>
+  )
+}
+
+/**
+ * 今天剩下的时间。课原样落位，事务排进空隙，每段一句为什么排在这里。
+ *
+ * 它是「今天装得下」的凭据，也是精力判断在挑选之外唯一看得见的地方：
+ * 动脑的排在清醒的那段、轻的排在饭后和晚上，用户从位置就能看出来。
+ */
+function DayPlan({ plan }: { plan: PlanSlot[] }) {
+  if (plan.length === 0) return null
+  return (
+    <section className="day-plan">
+      <h2 className="group-label">今天</h2>
+      <ol className="plain-list">
+        {plan.map((slot) => (
+          <li key={`${slot.start}-${slot.itemId}`} className={`plan-slot plan-${slot.kind}`}>
+            <span className="plan-time">{slot.start}–{slot.end}</span>
+            <span className="plan-body">
+              <Link className="plan-title" to={`/items/${slot.itemId}`}>{slot.title}</Link>
+              {slot.note !== '' && <span className="plan-note">{slot.note}</span>}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 
