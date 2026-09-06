@@ -205,3 +205,21 @@ server 每次调用会打一行用量，`[llm ...] 入 … 出 … 缓存命中 
   半年时返回里只剩校历，课表那一类整个消失，而且不报错。
 - `data/ruc-cookies.json` 等价于一次登录。删掉它就是退出登录，与设置页上那个按钮
   同义。
+
+## 打包成便携版
+
+不做安装包：macOS 是 zip 里的一个 `FlowPal.app`，Windows 是 zip 里的一个目录，
+双击 `FlowPal.exe`。解压即用。
+
+```bash
+pnpm dist        # macOS（arm64 + x64）与 Windows（x64）一起出，产物在 dist/release/
+pnpm dist:mac    # 只出 macOS
+pnpm dist:win    # 只出 Windows（在 macOS 上也能交叉打）
+```
+
+打包时会把 `config.local.json`（含模型 key）、`prompts/`、`data/calendar.json` 一并
+放进 `Resources/`（Windows 是 `resources/`），运行时从那里读；用户数据仍在系统的
+应用数据目录。改配置就改那个目录里的 `config.local.json`。
+
+- macOS：包未签名。第一次打开若提示「已损坏」，在终端执行 `xattr -cr FlowPal.app` 再双击。
+- 从 VS Code 的终端里手动启动时要先 `unset ELECTRON_RUN_AS_NODE`，否则进程会静默退出；双击图标不受影响。

@@ -1,5 +1,8 @@
 {
   "name": "flowpal",
+  "version": "0.1.0",
+  "description": "一个懂你的 AI 学习伙伴",
+  "author": "FlowPal",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.0.0",
@@ -20,10 +23,16 @@
     "check": "pnpm typecheck && pnpm check:tokens && pnpm check:markup && pnpm check:sync && pnpm check:fixtures",
     "demo:reset": "pnpm --filter @flowpal/server demo:reset",
     "test:sync": "pnpm --filter @flowpal/server test:sync",
-    "typecheck": "pnpm -r exec tsc --noEmit"
+    "typecheck": "pnpm -r exec tsc --noEmit",
+    "build:app": "pnpm --filter @flowpal/app build",
+    "dist:mac": "pnpm build:app && pnpm build:electron && electron-builder --mac",
+    "dist:win": "pnpm build:app && pnpm build:electron && electron-builder --win",
+    "dist": "pnpm build:app && pnpm build:electron && electron-builder --mac --win"
   },
   "devDependencies": {
+    "electron-builder": "^26.15.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
-  }
+  },
+  "main": "packages/electron/dist/main.mjs"
 }

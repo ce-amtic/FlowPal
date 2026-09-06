@@ -1,0 +1,37 @@
+# 便携包：macOS 是一个 zip 里的 FlowPal.app，Windows 是一个 zip 里的 FlowPal.exe 及其目录。
+# 都不是安装版，解压即用。
+#
+# 主进程在 app.asar 旁边（Resources/）找 config.example.json 来定位“仓库根”，
+# 所以 prompts、日历与配置都以 extraResources 放进 Resources/，而不是打进 asar。
+# 渲染层则要在 asar 内保持 packages/app/dist 的相对路径。
+appId: com.flowpal.desktop
+productName: FlowPal
+electronVersion: 44.2.0
+npmRebuild: false
+nodeGypRebuild: false
+directories:
+  output: dist/release
+files:
+  - package.json
+  - packages/electron/dist/**
+  - packages/app/dist/**
+  - "!**/node_modules/**"
+extraResources:
+  - from: config.example.json
+    to: config.example.json
+  - from: config.local.json
+    to: config.local.json
+  - from: prompts
+    to: prompts
+  - from: data/calendar.json
+    to: data/calendar.json
+mac:
+  target:
+    - target: zip
+      arch: [arm64, x64]
+  identity: null
+  category: public.app-category.productivity
+win:
+  target:
+    - target: zip
+      arch: [x64]
