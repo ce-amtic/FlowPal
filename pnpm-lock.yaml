@@ -55,22 +55,6 @@ importers:
         specifier: ^6.0.5
         version: 6.4.3(@types/node@24.13.3)(tsx@4.23.13)
 
-  packages/desktop:
-    dependencies:
-      '@flowpal/server':
-        specifier: workspace:*
-        version: link:../server
-    devDependencies:
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.3
-      electron:
-        specifier: ^44.0.0
-        version: 44.2.0
-      esbuild:
-        specifier: ^0.24.0
-        version: 0.24.2
-
   packages/electron:
     dependencies:
       '@flowpal/server':

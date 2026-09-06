@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "dev": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron ."
   },
-  "//": "新 Electron 壳。packages/desktop 仍是迁移期旧 demo；所有 server 业务保持在 @flowpal/server。dev 前请另起 @flowpal/app dev，或设置 FLOWPAL_APP_URL。",
+  "//": "全仓库唯一 import electron 的地方；所有 server 业务保持在 @flowpal/server。dev 前请另起 @flowpal/app dev，或设置 FLOWPAL_APP_URL。",
   "dependencies": {
     "@flowpal/server": "workspace:*"
   },
