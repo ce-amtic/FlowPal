@@ -176,6 +176,9 @@ button.primary:hover { opacity: 0.88; }
   line-height: var(--leading);
   resize: none;
   outline: none;
+  /* 高度由内容决定（见 Composer）。到这儿为止，再多就在框里滚，不往上顶正文 */
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 .composer-box::placeholder { color: var(--fg-faint); }

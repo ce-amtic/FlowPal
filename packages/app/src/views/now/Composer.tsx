@@ -44,6 +44,20 @@ export function Composer({
 
   useEffect(() => { if (autoFocus) box.current?.focus() }, [autoFocus])
 
+  /*
+   * 跟着内容长高。
+   *
+   * 粘一条群通知进来常常是七八行，固定一行等于让人在一条缝里读自己刚投的东西。
+   * 先归零再按 scrollHeight 量，否则删字时它只会长不会缩；上限交给 CSS 的
+   * max-height，超过之后框内自己滚，这个框不会长到把正文顶掉。
+   */
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [text])
+
   const record = useMutation({
     mutationFn: async (input: Recording) => {
       if (input.kind === 'text') {

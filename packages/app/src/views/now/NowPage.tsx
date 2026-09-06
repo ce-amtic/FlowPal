@@ -11,7 +11,6 @@ import { PetHost } from '../../pet/PetHost.tsx'
 import { usePetStatus } from '../../pet/context.tsx'
 import { subscribeDesktopInput } from '../../pet/input-dispatcher.ts'
 import { daysBetween } from '../../lib/format.ts'
-import { ItemRow } from '../../shell/ItemRow.tsx'
 import { Composer } from './Composer.tsx'
 import { Conversation, type Turn } from './Conversation.tsx'
 import './now.css'
@@ -234,34 +233,33 @@ const UPCOMING_DAYS = 7
  * 接下来。它不是装饰，是「剩下的没丢」的凭据——只显示一件事而不给这个凭据，
  * 用户不敢信。
  *
- * 只列 7 天，更远的收成一行通向日程：这一段是安心用的，日程才是完整的轴。
- * 两边用同一个窗口，用户看到的「剩下的」就是模型看到的「剩下的」。
+ * 但凭据是一句话，不是一份清单。上面「今天」已经把今天铺开了，这里再把七天内
+ * 每一件都列出来，就是把刚卸下去的负担原样搬回屏幕上——课表进来之后那是几十行。
+ * 所以这里只说还有多少件、在哪儿看得到，展开留给日程。
  */
 function Upcoming() {
   const { data } = useQuery({ queryKey: queryKeys.agenda, queryFn: api.getAgenda })
 
   const today = new Date()
-  const all = (data?.days ?? []).flatMap((d) => d.items.map((entry) => ({ day: d.day, item: entry.item })))
-  const within = all.filter((u) => daysBetween(today, new Date(u.day)) <= UPCOMING_DAYS)
-  const beyond = all.length - within.length
+  const ahead = (data?.days ?? [])
+    .map((d) => ({ days: daysBetween(today, new Date(d.day)), count: d.items.length }))
+    .filter((d) => d.days > 0)
+  const within = ahead.filter((d) => d.days <= UPCOMING_DAYS)
+    .reduce((n, d) => n + d.count, 0)
+  const beyond = ahead.filter((d) => d.days > UPCOMING_DAYS)
+    .reduce((n, d) => n + d.count, 0)
 
-  if (within.length === 0 && beyond === 0) return null
+  if (within === 0 && beyond === 0) return null
 
   return (
     <section className="upcoming">
-      <h2 className="group-label">接下来</h2>
-      <ul className="plain-list">
-        {within.map(({ item }) => <ItemRow item={item} key={item.id} />)}
-        {beyond > 0 && (
-          <li>
-            {/* 通往日程。留出图标那一列的宽度，它才和上面几行对齐 */}
-            <Link className="row" to="/agenda">
-              <ArrowRight className="row-icon" size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />
-              <span className="row-title row-more">还有 {beyond} 件</span>
-            </Link>
-          </li>
-        )}
-      </ul>
+      <Link className="row" to="/agenda">
+        <ArrowRight className="row-icon" size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />
+        <span className="row-title row-more">
+          {within > 0 ? `未来七天还有 ${within} 件` : '七天内没有别的事'}
+          {beyond > 0 && `，更远 ${beyond} 件`}
+        </span>
+      </Link>
     </section>
   )
 }

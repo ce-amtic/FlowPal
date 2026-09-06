@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import { Check, Unplug } from 'lucide-react'
@@ -22,6 +22,21 @@ export type Turn = { key: string; asked: string; runId: string }
  * 也不落库。真相在库里，不在这段对话里；清掉它不会丢任何东西。
  */
 export function Conversation({ turns, onClear }: { turns: Turn[]; onClear: () => void }) {
+  const latest = turns[turns.length - 1]?.key
+  const end = useRef<HTMLDivElement>(null)
+
+  /*
+   * 新的一轮追加在整页最末尾，而人的视线还在上面那张卡上。不把他带过去，一次
+   * 投放在屏幕上就是什么都没发生——从桌宠拖进来的尤其如此，那时候他连滚都想不起来滚。
+   *
+   * 只在「又多了一轮」时滚，不在这一轮的内容长出来时滚：回复是一段一段流进来的，
+   * 每次都追下去会把正在读的那行不停往上推。
+   */
+  useEffect(() => {
+    if (latest === undefined) return
+    end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [latest])
+
   if (turns.length === 0) return null
   return (
     <section className="talk">
@@ -30,6 +45,7 @@ export function Conversation({ turns, onClear }: { turns: Turn[]; onClear: () =>
         <button className="quiet" onClick={onClear}>清空</button>
       </div>
       {turns.map((t) => <TurnBlock turn={t} key={t.key} />)}
+      <div ref={end} aria-hidden />
     </section>
   )
 }
