@@ -13,6 +13,13 @@ export type DesktopInput =
   | { type: 'files'; paths: string[]; source: 'drop' }
   | { type: 'text'; text: string; source: 'drop' }
   | { type: 'receipt'; message: string; error?: boolean }
+  /**
+   * 一次不是从记录框发起的投放已经开跑了。
+   *
+   * 「此刻」据此长出一轮对话——跟打字投放同一个组件、同一个加载态、同一句回执。
+   * 少了这一条，从桌宠、快捷键、拖放进来的东西只在库里留痕，屏幕上什么都不动。
+   */
+  | { type: 'started'; asked: string; runId: string }
 
 export type DesktopInputListener = (input: DesktopInput) => void
 

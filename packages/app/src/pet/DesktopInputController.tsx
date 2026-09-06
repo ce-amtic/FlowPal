@@ -39,6 +39,11 @@ export function DesktopInputController() {
         rawType: imagePath ? 'image' : 'text',
         ...(imagePath ? { rawBlobPath: imagePath } : { rawText }),
       })
+      dispatchDesktopInput({
+        type: 'started',
+        asked: imagePath ? '剪贴板里的图片' : firstLine(rawText),
+        runId: result.run.id,
+      })
       // 投放立刻返回、循环在后台跑，所以这里拿到的 run 一定还在 running。
       // 回执要说的是结果，得等它跑完
       const outcome = await api.awaitRun(result.run.id)
@@ -67,6 +72,7 @@ export function DesktopInputController() {
     setStatus('processing', { message: '正在提取日程…' })
     try {
       const result = await api.throwIn({ source: 'drop', rawType: 'text', rawText: text })
+      dispatchDesktopInput({ type: 'started', asked: firstLine(text), runId: result.run.id })
       const outcome = await api.awaitRun(result.run.id)
       const message = outcome.message || '已记下。原文已存。'
       const failed = outcome.status !== 'done'
@@ -98,6 +104,7 @@ export function DesktopInputController() {
           rawType: rawTypeForPath(path),
           rawBlobPath: path,
         })
+        dispatchDesktopInput({ type: 'started', asked: basename(path), runId: result.run.id })
         const outcome = await api.awaitRun(result.run.id)
         if (outcome.status === 'done') completed += 1
         else failed += 1
@@ -159,6 +166,12 @@ export function DesktopInputController() {
   }), [captureClipboard, captureFiles, captureText, enqueue, navigate])
 
   return null
+}
+
+/** 投放上方那一行淡的小字：说清扔进去的是什么，不复述全文。 */
+function firstLine(text: string): string {
+  const line = text.trim().split('\n')[0]?.trim() ?? ''
+  return line.length > 60 ? `${line.slice(0, 60)}…` : line
 }
 
 function basename(path: string): string {

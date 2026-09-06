@@ -9,6 +9,7 @@ import { transition } from '../../tokens/motion.ts'
 import { ErrorState, Loading } from '../../shell/State.tsx'
 import { PetHost } from '../../pet/PetHost.tsx'
 import { usePetStatus } from '../../pet/context.tsx'
+import { subscribeDesktopInput } from '../../pet/input-dispatcher.ts'
 import { daysBetween } from '../../lib/format.ts'
 import { ItemRow } from '../../shell/ItemRow.tsx'
 import { Composer } from './Composer.tsx'
@@ -51,6 +52,19 @@ export function NowPage() {
    * 不会丢任何东西。
    */
   const [turns, setTurns] = useState<Turn[]>([])
+
+  /*
+   * 从桌宠、快捷键、拖放进来的投放也追加到这里。
+   *
+   * 它们跟打字投放是同一件事，只是发起的地方不同；不接住的话，屏幕上唯一的变化
+   * 是「最近」里悄悄多一行，而那和什么都没发生长得一样。
+   */
+  useEffect(() => subscribeDesktopInput((input) => {
+    if (input.type !== 'started') return
+    setTurns((t) => t.some((turn) => turn.runId === input.runId)
+      ? t
+      : [...t, { key: input.runId, asked: input.asked, runId: input.runId }])
+  }), [])
 
   const refresh = useMutation({
     mutationFn: api.refreshNow,
