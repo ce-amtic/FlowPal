@@ -53,6 +53,36 @@ function droppedText(transfer: DataTransfer | null): string {
   return text.trim()
 }
 
+/**
+ * 拖放悬停。
+ *
+ * `dragleave` 在子元素之间移动时也会触发，光看它会让形象在拖的过程中不停抖。
+ * 数进出的次数，归零才算真的离开。
+ */
+function listenDropHover(callback: (over: boolean) => void): Unsubscribe {
+  let depth = 0
+  const onEnter = (): void => {
+    depth += 1
+    if (depth === 1) callback(true)
+  }
+  const onLeave = (): void => {
+    depth = Math.max(0, depth - 1)
+    if (depth === 0) callback(false)
+  }
+  const onDrop = (): void => {
+    depth = 0
+    callback(false)
+  }
+  document.addEventListener('dragenter', onEnter, true)
+  document.addEventListener('dragleave', onLeave, true)
+  document.addEventListener('drop', onDrop, true)
+  return () => {
+    document.removeEventListener('dragenter', onEnter, true)
+    document.removeEventListener('dragleave', onLeave, true)
+    document.removeEventListener('drop', onDrop, true)
+  }
+}
+
 function listenDroppedContent(callback: (content: DroppedContent) => void): Unsubscribe {
   const onDrop = (event: DragEvent): void => {
     event.preventDefault()
@@ -112,6 +142,7 @@ function forwardInput(input: PetForwardInput): Promise<void> {
 const input = {
   onHotkey: listenHotkey,
   onContentDropped: listenDroppedContent,
+  onDropHover: listenDropHover,
   readClipboard: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.readClipboard),
   readClipboardImage: (): Promise<string | null> => ipcRenderer.invoke(IPC_CHANNELS.readClipboardImage),
   onDesktopInput: listenDesktopInput,
@@ -163,6 +194,7 @@ const bridge: FlowPalDesktopBridge = {
   platform: process.platform,
   onHotkeyOpen: input.onHotkey,
   onContentDropped: input.onContentDropped,
+  onDropHover: input.onDropHover,
   onDesktopInput: input.onDesktopInput,
   onFocusSessionChanged: (callback) => subscribe<unknown>(IPC_CHANNELS.focusSessionChanged, (payload) => {
     if (isFocusSessionChange(payload)) callback(payload)

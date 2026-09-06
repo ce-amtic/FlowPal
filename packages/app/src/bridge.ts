@@ -27,6 +27,8 @@ export type FlowpalBridge = {
   platform: string
   onHotkeyOpen: (cb: () => void) => Unsubscribe
   onContentDropped: (cb: (content: DroppedContent) => void) => Unsubscribe
+  /** 有东西被拖到窗口上方 / 离开了。形象据此变个样子 */
+  onDropHover?: (cb: (over: boolean) => void) => Unsubscribe
   onDesktopInput?: (cb: (input: DesktopInputBridgeEvent) => void) => Unsubscribe
   /** Native main-window focus drives the inline/floating pet hand-off. */
   onMainWindowFocusChanged?: (cb: (change: {
@@ -71,6 +73,7 @@ export type FlowpalBridge = {
   input?: {
     onHotkey?: (cb: () => void) => Unsubscribe
     onContentDropped?: (cb: (content: DroppedContent) => void) => Unsubscribe
+    onDropHover?: (cb: (over: boolean) => void) => Unsubscribe
     readClipboard?: () => Promise<string>
     readClipboardImage?: () => Promise<string | null>
     forwardFiles?: (paths: string[]) => Promise<void>

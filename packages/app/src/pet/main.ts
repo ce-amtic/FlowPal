@@ -255,6 +255,29 @@ const removeFiles = listenDrops?.(({ paths, text }) => {
   }
 })
 
+/*
+ * 有东西悬在头上。
+ *
+ * 拖到一半时形象一动不动，人没法判断这个窗口收不收得着——松手之前唯一的信息就是
+ * 它有没有反应。跳一下、换个好奇的表情，比任何提示语都直接。
+ *
+ * 悬停前是什么状态记下来，离开时放回去：拖到一个正在跑的形象上，不该把「正在提取」
+ * 这句话抹掉。
+ */
+let statusBeforeHover: PetStatus | null = null
+const removeHover = window.flowpal?.input?.onDropHover?.((over) => {
+  if (over) {
+    statusBeforeHover = renderer.state.snapshot.status
+    renderer.setStatus('receiving', { message: '松手就收下' })
+    renderer.setExpression('curious')
+    renderer.hop()
+    return
+  }
+  renderer.setExpression('calm')
+  if (statusBeforeHover !== null) renderer.setStatus(statusBeforeHover)
+  statusBeforeHover = null
+})
+
 window.addEventListener('beforeunload', () => {
   window.clearTimeout(tapHintTimer)
   if (window.pet) delete window.pet
@@ -263,3 +286,4 @@ window.addEventListener('beforeunload', () => {
 window.addEventListener('beforeunload', () => removeStateSubscription(), { once: true })
 window.addEventListener('beforeunload', () => removePetCommand?.(), { once: true })
 window.addEventListener('beforeunload', () => removeFiles?.(), { once: true })
+window.addEventListener('beforeunload', () => removeHover?.(), { once: true })

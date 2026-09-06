@@ -29,6 +29,8 @@ export interface FlowPalDesktopBridge {
   platform: NodeJS.Platform
   onHotkeyOpen(callback: () => void): Unsubscribe
   onContentDropped(callback: (content: DroppedContent) => void): Unsubscribe
+  /** 有东西被拖到这个窗口上方 / 离开了。形象据此变个样子。 */
+  onDropHover(callback: (over: boolean) => void): Unsubscribe
   onDesktopInput(callback: (input: DesktopInput) => void): Unsubscribe
   onFocusSessionChanged(callback: (change: FocusSessionChange) => void): Unsubscribe
   onMainWindowFocusChanged(callback: (change: MainWindowFocusChange) => void): Unsubscribe
@@ -56,6 +58,7 @@ export interface FlowPalDesktopBridge {
   input: {
     onHotkey(callback: () => void): Unsubscribe
     onContentDropped(callback: (content: DroppedContent) => void): Unsubscribe
+    onDropHover(callback: (over: boolean) => void): Unsubscribe
     readClipboard(): Promise<string>
     readClipboardImage(): Promise<string | null>
     onDesktopInput(callback: (input: DesktopInput) => void): Unsubscribe
