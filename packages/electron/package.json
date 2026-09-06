@@ -1,0 +1,22 @@
+{
+  "name": "@flowpal/electron",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.mjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron ."
+  },
+  "//": "新 Electron 壳。packages/desktop 仍是迁移期旧 demo；所有 server 业务保持在 @flowpal/server。dev 前请另起 @flowpal/app dev，或设置 FLOWPAL_APP_URL。",
+  "dependencies": {
+    "@flowpal/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "electron": "^44.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.2"
+  }
+}

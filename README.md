@@ -17,11 +17,17 @@ cp config.example.json config.local.json   # 填模型 baseUrl / apiKey / model
 四种跑法，按在做什么选：
 
 ```bash
-pnpm dev           # 完整的桌面应用（起界面 + Electron）
+pnpm dev           # 完整的桌面应用（起界面 + 新 Electron 壳）
 pnpm dev:server    # 只起 server，调管道用。不开 Electron
 pnpm dev:app       # 只起界面，浏览器打开 localhost:5173。不开 Electron
-pnpm dev:desktop   # 只起 Electron；界面要另开一个 pnpm dev:app
+pnpm dev:mock:desktop # 测试数据 + Electron 桌面应用（不启动真实 server/model）
+pnpm dev:desktop   # 只起新 Electron；界面要另开一个 pnpm dev:app
+pnpm dev:desktop:legacy # 迁移期旧 packages/desktop demo
 ```
+
+测试数据只用于界面和桌宠交互验收，不会调用模型或写入真实数据库。若需要构建一个
+内置样例数据的前端资源，可运行 `pnpm build:app:mock`；真实构建仍使用默认的
+`pnpm --filter @flowpal/app build`。
 
 调 prompt 不需要开界面：
 
@@ -52,7 +58,8 @@ packages/
   shared/    契约：条目、项目、agent 工具 schema、NowOutput、Ctx、校历。三个包共用
   server/    Hono + SQLite + agent 循环 + buildContext + 教务接入。不依赖 electron
   app/       React 界面。shell/ 是容器，views/collection/ 是采集视图
-  desktop/   Electron 壳。全仓库唯一 import electron 的地方
+  electron/  新 Electron 主进程、透明 3D 桌宠窗口与窄 preload
+  desktop/   迁移期旧 Electron demo（不再是默认入口）
 prompts/     agent.md / now.md / extract.md
 fixtures/    演示碎片与手写期望值
 data/        校历（进仓库）与 SQLite（不进）
@@ -129,7 +136,7 @@ server 每次调用会打一行用量，`[llm ...] 入 … 出 … 缓存命中 
 ## 几个环境上的坑
 
 - VSCode 的集成终端会设 `ELECTRON_RUN_AS_NODE=1`，带着它启动 Electron 会进 Node 模式，
-  `require('electron')` 返回字符串而不是对象。`dev:desktop` 里已经把它去掉了。
+  `require('electron')` 返回字符串而不是对象。新 `dev:desktop` 会显式解除它。
 - `pnpm demo:reset` 会删掉并重建库文件。**server 开着的时候跑它，server 仍然抓着
   被删掉的那份**，于是「重置了，界面却没变」。重置后重启 server。
 - **`pnpm dev` 与 `pnpm dev:server` 用的不是同一个库。** Electron 把库放在

@@ -19,6 +19,8 @@ import { ItemPage } from '../views/item/ItemPage.tsx'
 import { FocusPage } from '../views/focus/FocusPage.tsx'
 import { SettingsPage } from '../views/settings/SettingsPage.tsx'
 import { WelcomePage } from '../views/welcome/WelcomePage.tsx'
+import { DesktopInputController } from '../pet/DesktopInputController.tsx'
+import { PetStatusProvider } from '../pet/context.tsx'
 import './shell.css'
 
 /**
@@ -75,13 +77,22 @@ export function App() {
    * 手上没有目标就不成其为模式——直接开这条路由时它照常留在壳里，那一页会说
    * 该去哪儿选一件。
    */
-  if (location.pathname === '/focus' && location.state?.focus) return <FocusPage />
+  if (location.pathname === '/focus' && location.state?.focus) {
+    return (
+      <PetStatusProvider>
+        <DesktopInputController />
+        <FocusPage />
+      </PetStatusProvider>
+    )
+  }
 
   return (
-    <div className="shell">
-      <TitleBar onOpenPending={() => setPendingOpen(true)} />
+    <PetStatusProvider>
+      <DesktopInputController />
+      <div className="shell">
+        <TitleBar onOpenPending={() => setPendingOpen(true)} />
 
-      <main className="page">
+        <main className="page">
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
@@ -107,9 +118,10 @@ export function App() {
             </PageBoundary>
           </motion.div>
         </AnimatePresence>
-      </main>
+        </main>
 
-      {pendingOpen && <PendingOverlay onClose={() => setPendingOpen(false)} />}
-    </div>
+        {pendingOpen && <PendingOverlay onClose={() => setPendingOpen(false)} />}
+      </div>
+    </PetStatusProvider>
   )
 }

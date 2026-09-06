@@ -7,7 +7,8 @@ import { api, queryKeys } from '../../api.ts'
 import { ICON } from '../../tokens/icons.ts'
 import { transition } from '../../tokens/motion.ts'
 import { ErrorState, Loading } from '../../shell/State.tsx'
-import { Pebble } from '../../pebble/Pebble.tsx'
+import { PetHost } from '../../pet/PetHost.tsx'
+import { usePetStatus } from '../../pet/context.tsx'
 import { daysBetween } from '../../lib/format.ts'
 import { ItemRow } from '../../shell/ItemRow.tsx'
 import { Composer } from './Composer.tsx'
@@ -24,6 +25,8 @@ import './now.css'
  * 重新调模型，所以它不在动作行里，在页面右上角。
  */
 export function NowPage() {
+  const { setStatus: setPetStatus } = usePetStatus()
+  useEffect(() => { setPetStatus('idle') }, [setPetStatus])
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.now,
     queryFn: api.getNow,
@@ -74,7 +77,7 @@ export function NowPage() {
         : undefined}
     >
       <header className="now-head">
-        <Pebble size={104} />
+        <PetHost size={128} />
         <div className="now-greeting">
           <p className="greeting">{greeting()}</p>
           {/*

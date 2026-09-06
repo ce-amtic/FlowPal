@@ -6,12 +6,18 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { Calendar, Run } from '@flowpal/shared'
-import { createCtx, nowInShanghai, FragmentSource, RawType, NowChoice, NowOutput, nowJsonSchema } from '@flowpal/shared'
+import {
+  createCtx, nowInShanghai, FragmentSource, RawType, NowOutput, nowJsonSchema,
+  EndFocusRequest, SettingsPatch, StartFocusRequest, SyncRunRequest,
+} from '@flowpal/shared'
+import type { RucExternalSource } from '@flowpal/shared'
+import { NowChoice } from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
 import { newId } from '../store/db.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
 import {
   addItemCitations, addItemSource, getItem, insertItem, itemHistory, listItems, updateItemFields,
+  upsertByExternalId,
 } from '../store/items.ts'
 import type { ItemWithSources } from '../store/items.ts'
 import {
@@ -20,20 +26,48 @@ import {
 import {
   appendRunEvent, finishRun, getRun, listRunEvents, listRuns, startRun,
 } from '../store/runs.ts'
-import { insertFocusSession, listFocusSessions } from '../store/focus.ts'
+import {
+  endFocusSession, getFocusSession, insertFocusSession, listFocusApiSessions, listFocusSessions,
+  startFocusSessionResult,
+} from '../store/focus.ts'
 import { clearNowCache, getNowCache, setNowCache } from '../store/now-cache.ts'
+import {
+  getSettings, SecretSettingsUnsupported, SettingsRevisionConflict, updateSettings,
+} from '../store/settings.ts'
+import { finishSyncRun, getSyncStatus, startSyncRun } from '../store/sync.ts'
+import {
+  bundledFixtureRequest,
+  runRucSyncBatch,
+  type RucOnlineBroker,
+  type RucSyncRequest,
+} from '../sync/runner.ts'
+import { ExternalShapeError, UnsupportedExternalSourceError } from '../sync/types.ts'
 import { getSetting, setSetting } from '../store/settings.ts'
 import { extract } from '../pipeline/extract.ts'
 import { mapStructured } from '../pipeline/map-structured.ts'
 import { buildContext } from '../context/build.ts'
 import { callJson } from '../llm/client.ts'
 import { runAgentLoop, type AgentLoopEvent } from '../agent/loop.ts'
+import {
+  LocalFileError,
+  localIcsPayload,
+  parseIcsRecords,
+  readLocalFile,
+  type LocalFileContents,
+} from '../input/local-file.ts'
 
 /**
  * 冻结的路由清单。界面和（将来的）手机端都只认这几个口，所以三个人可以各写各的，
  * 不用等对方。形状都在这里定死，改形状前先跟另外两方说。
  */
-export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: Calendar) {
+export type RouteDependencies = {
+  /** Electron-owned auth/session broker; omitted in browser/standalone mode. */
+  rucBroker?: RucOnlineBroker
+}
+
+export function createRoutes(
+  db: DatabaseSync, config: ServerConfig, calendar: Calendar, dependencies: RouteDependencies = {},
+) {
   const app = new Hono()
 
   app.use('/api/*', cors())
@@ -123,7 +157,7 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     source: FragmentSource,
     rawType: RawType,
     rawText: z.string().nullable().optional(),
-    rawBlobPath: z.string().nullable().optional(),
+    rawBlobPath: z.string().max(4096).refine((value) => !/[\u0000]/.test(value), '文件路径包含非法字符').nullable().optional(),
     device: z.string().optional(),
   })
 
@@ -147,60 +181,134 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
       return c.json({ error: '碎片参数不对', issues: parsed.error.issues }, 400)
     }
 
-    const fragment = insertFragment(db, ctx, parsed.data)
+    let localFile: LocalFileContents | null = null
+    let localIcsRecords: ReturnType<typeof parseIcsRecords> | null = null
+    let rawText = parsed.data.rawText ?? null
+    if (parsed.data.rawType === 'file') {
+      if (!parsed.data.rawBlobPath) {
+        return c.json({ error: 'file_requires_path', message: '文件碎片必须带本机路径。' }, 400)
+      }
+      try {
+        localFile = await readLocalFile(parsed.data.rawBlobPath)
+        rawText = localFile.text
+      } catch (error) {
+        if (error instanceof LocalFileError) {
+          return c.json({ error: error.code, message: error.message }, error.status)
+        }
+        throw error
+      }
+    }
+
+    // ICS remains raw_type=file so the original dropped path is visible in
+    // Recent/Item provenance. Its validated records are stored as the same
+    // structured payload consumed by mapStructured, avoiding an LLM call.
+    if (localFile?.kind === 'ics') {
+      try {
+        localIcsRecords = parseIcsRecords(localFile.text, ctx.now)
+        rawText = localIcsPayload(localIcsRecords, ctx.now, localFile.text)
+      } catch (error) {
+        // A malformed calendar is still useful provenance. Preserve the raw
+        // bytes and a terminal run rather than silently dropping the file.
+        const fragment = insertFragment(db, ctx, {
+          ...parsed.data,
+          rawText: localFile.text,
+          rawBlobPath: localFile.originalPath,
+        })
+        const run = startRun(db, ctx, fragment.id)
+        const message = error instanceof LocalFileError
+          ? `${error.message}原文已存。`
+          : 'ICS 文件无法解析；原文已存。'
+        finishRun(db, ctx, run.id, 'failed', message, null)
+        emitRunFinished(run.id, getRun(db, run.id) as Run)
+        broadcastChanged(ctx.now)
+        return c.json({ fragment, run: getRun(db, run.id), items: [], plans: [] })
+      }
+    }
+
+    const fragment = insertFragment(db, ctx, {
+      ...parsed.data,
+      ...(localFile ? { rawText, rawBlobPath: localFile.originalPath } : {}),
+    })
     const run = startRun(db, ctx, fragment.id)
     broadcastChanged(ctx.now)
 
     /*
-     * 循环放到后台跑，这里立刻把 run 交出去。
+     * 结构化来源（同步来的课表、拖进来的 ICS）不经模型：解析加入库是几毫秒的事，
+     * 中间没有任何值得播的进展。这一条当场跑完，条目随响应一起回去。
+     */
+    if (fragment.rawType === 'structured' || localFile?.kind === 'ics') {
+      const items = importStructured()
+      broadcastChanged(ctx.now)
+      return c.json({ fragment, run: getRun(db, run.id), items })
+    }
+
+    /*
+     * 模型那条路要几十秒，放到后台跑，这里立刻把 run 交出去。
      *
-     * 同步等到跑完的话，调用方在几十秒里唯一能显示的就是一句「正在理解」——而这
+     * 同步等到跑完的话，调用方在这几十秒里唯一能显示的就是一句「正在理解」——而这
      * 期间它其实一直在看具体的东西。拿到 run.id 才订阅得了 /api/runs/:id/events，
      * 那条流里逐步播的正是它在看什么。
      */
     void process()
     return c.json({ fragment, run }, 202)
 
-    async function process(): Promise<void> {
-    let items: ItemWithSources[] = []
-    try {
-      if (fragment.rawType === 'structured') {
-        // 结构化来源不经模型，也不走循环；B 的同步路径另有 upsertByExternalId。
+    /** 不经模型的那条路。抛出的话由调用处收成一次失败的 run，碎片照样留着 */
+    function importStructured(): ItemWithSources[] {
+      try {
+        // B 的同步路径另有 upsertByExternalId：同一个外部 id 再来一次是改，不是新增
         const candidates = mapStructured(ctx, fragment)
-        const itemIds = candidates.map((e) => {
+        let created = 0
+        let updated = 0
+        const itemIds = candidates.map((e, index) => {
+          const externalId = localIcsRecords?.[index]?.externalId
+          if (externalId) {
+            const before = db.prepare(`SELECT id FROM items WHERE external_id = ?`).get(externalId) as
+              { id: string } | undefined
+            const id = upsertByExternalId(db, ctx, fragment.id, externalId, e)
+            if (before) updated += 1
+            else created += 1
+            return id
+          }
+          created += 1
           const id = insertItem(db, ctx, e)
           addItemSource(db, ctx, id, fragment.id)
           addItemCitations(db, id, fragment.id, e)
           return id
         })
-        items = itemIds.map((id) => getItem(db, id) as ItemWithSources)
-        const counts = {
-          created: itemIds.length,
-          updated: 0,
+        const items = itemIds.map((id) => getItem(db, id) as ItemWithSources)
+        finishRun(db, ctx, run.id, 'done', items.length === 0
+          ? '没有需要记录的内容。原文已存。'
+          : '已记下。原文已存。', {
+          created,
+          updated,
           dropped: 0,
           needsConfirm: items.filter((i) => i.status === 'needs_confirm').length,
-        }
-        const message = items.length === 0 ? '没有需要记录的内容。原文已存。' : '已记下。原文已存。'
-        finishRun(db, ctx, run.id, 'done', message, counts)
+        })
         emitRunFinished(run.id, getRun(db, run.id) as Run)
-      } else {
+        return items
+      } catch {
+        finishRun(db, ctx, run.id, 'failed', '这份数据没能读懂。原文已存。', null)
+        emitRunFinished(run.id, getRun(db, run.id) as Run)
+        return []
+      }
+    }
+
+    async function process(): Promise<void> {
+      try {
         const result = await runAgentLoop(config, db, ctx, fragment, (e) => {
           emitRunToolCall(run.id, e, nowInShanghai())
         })
         finishRun(db, ctx, run.id, result.status, result.message, result.counts)
         emitRunFinished(run.id, getRun(db, run.id) as Run)
-        items = listItems(db).filter((i) => i.sourceFragmentIds.includes(fragment.id))
+      } catch (e) {
+        const message = isConnectionError(e)
+          ? '无法连接模型。原文已存。'
+          : '未能理解这条。原文已存。'
+        finishRun(db, ctx, run.id, 'failed', message, null)
+        emitRunFinished(run.id, getRun(db, run.id) as Run)
       }
-    } catch (e) {
-      const message = isConnectionError(e)
-        ? '无法连接模型。原文已存。'
-        : '未能理解这条。原文已存。'
-      finishRun(db, ctx, run.id, 'failed', message, null)
-      emitRunFinished(run.id, getRun(db, run.id) as Run)
-    }
-    // 抽出来的条目由这一条广播让各页自己重取，不再随响应回去
-    void items
-    broadcastChanged(ctx.now)
+      // 抽出来的条目由这一条广播让各页自己重取，不随响应回去：那时响应早已发走
+      broadcastChanged(ctx.now)
     }
   })
 
@@ -214,6 +322,181 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
       rawText: body.rawText ?? null, rawBlobPath: body.rawBlobPath ?? null,
     }
     return c.json(await extract(config, ctx, fragment))
+  })
+
+  // ── 设置与同步 ─────────────────────────────────────────────────────
+  // Settings returns only the public draft. Secret actions are deliberately
+  // rejected here; Electron's safeStorage/WebView owns those credentials.
+  app.get('/api/settings', (c) => {
+    const settings = getSettings(db, config)
+    return c.json({
+      settings: {
+        ...settings,
+        chronotype_workday_wake: settings.chronotype.workdayWakeTime,
+        chronotype_restday_wake: settings.chronotype.freeDayWakeTime,
+        onboarded_at: getSetting(db, 'onboarded_at'),
+      },
+      sync: getSyncStatus(db, config, settings.ruc.authorized, Boolean(dependencies.rucBroker)),
+    })
+  })
+
+  app.put('/api/settings', async (c) => {
+    let body: unknown
+    try { body = await c.req.json() } catch { return c.json({ error: '设置参数不是合法 JSON' }, 400) }
+    const parsed = SettingsPatch.safeParse(body)
+    if (!parsed.success) return c.json({ error: '设置参数不对', issues: parsed.error.issues }, 400)
+    try {
+      const ctx = ctxOf()
+      const settings = updateSettings(db, config, ctx, parsed.data)
+      broadcastChanged(ctx.now)
+      return c.json({
+        settings,
+        sync: getSyncStatus(db, config, settings.ruc.authorized, Boolean(dependencies.rucBroker)),
+      })
+    } catch (error) {
+      if (error instanceof SettingsRevisionConflict) {
+        return c.json({ error: 'settings_revision_conflict', settings: error.settings }, 409)
+      }
+      if (error instanceof SecretSettingsUnsupported) {
+        return c.json({
+          error: 'secret_settings_unsupported',
+          message: '模型密钥由桌面安全存储管理；这里只接受 keep，不接收密钥明文。',
+        }, 422)
+      }
+      throw error
+    }
+  })
+
+  app.get('/api/sync/status', (c) => {
+    const settings = getSettings(db, config)
+    return c.json({
+      status: getSyncStatus(db, config, settings.ruc.authorized, Boolean(dependencies.rucBroker)),
+    })
+  })
+
+  app.post('/api/sync/run', async (c) => {
+    let body: unknown = {}
+    try {
+      // An omitted body is intentionally shorthand for all configured
+      // sources, but malformed JSON must be a client error rather than
+      // silently turning into a full sync request.
+      const raw = await c.req.text()
+      if (raw.trim()) {
+        try { body = JSON.parse(raw) as unknown } catch {
+          return c.json({ error: '同步参数不是合法 JSON' }, 400)
+        }
+      }
+    } catch {
+      return c.json({ error: '同步参数不是合法 JSON' }, 400)
+    }
+    const parsed = SyncRunRequest.safeParse(body)
+    if (!parsed.success) return c.json({ error: '同步参数不对', issues: parsed.error.issues }, 400)
+    /*
+     * 这个口只跑教务那两个来源。`local.ics` 也是外部来源，但它是用户拖进来的一份
+     * 文件，没有会话也没有轮询——放它进来的话，下面每一处「是 portal 还是 graduate」
+     * 的判断都会把它当成 graduate，无声地按课表处理。
+     */
+    if (parsed.data.source === 'local.ics') {
+      return c.json({ error: 'source_not_syncable', message: 'ICS 文件请直接拖进窗口。' }, 400)
+    }
+    const sourceList: RucExternalSource[] = parsed.data.source
+      ? [parsed.data.source]
+      : ['ruc.portal', 'ruc.graduate']
+    if (parsed.data.mode === 'fixture' && parsed.data.payload !== undefined && sourceList.length !== 1) {
+      return c.json({ error: 'fixture_payload_requires_one_source' }, 400)
+    }
+    // `source` is optional in the shared request (undefined when omitted and
+    // null when explicitly sent); a term only has meaning for the one
+    // graduate source, so never silently fan it out to the portal + graduate
+    // batch when the caller forgot to choose a source.
+    if (parsed.data.mode === 'fixture' && parsed.data.source == null && parsed.data.term) {
+      return c.json({ error: 'fixture_term_requires_one_source' }, 400)
+    }
+    const ctx = ctxOf()
+    const started = startSyncRun(db, ctx, parsed.data.source ?? null)
+    if (started.reused) {
+      return c.json({ run: started.run, reused: true })
+    }
+
+    try {
+      const requests: RucSyncRequest[] = sourceList.map((source) => {
+        if (parsed.data.mode === 'online') {
+          return {
+            mode: 'online',
+            source,
+            ...(parsed.data.term ? { term: parsed.data.term } : {}),
+          }
+        }
+        const bundled = bundledFixtureRequest(source)
+        return {
+          ...bundled,
+          ...(parsed.data.payload !== undefined ? { payload: parsed.data.payload } : {}),
+          ...(parsed.data.term ? { term: parsed.data.term } : {}),
+        }
+      })
+      const result = await runRucSyncBatch(db, ctx, requests, dependencies.rucBroker, {
+        projectIdFor: (record) => {
+          // A course is a durable project; ordinary portal calendar entries
+          // are events only.  The normalizer supplies courseCode/classCode in
+          // metadata, so repeated meetings converge on one project name.
+          if (record.source !== 'ruc.graduate' || record.kind !== 'timetable') return null
+          const courseCode = record.metadata?.courseCode
+          const projectName = typeof courseCode === 'string' && courseCode.trim()
+            ? `${courseCode.trim()} ${record.title}`
+            : record.title
+          return createProject(db, ctx, { name: projectName }).id
+        },
+      })
+      const run = finishSyncRun(
+        db, ctx, started.run.id, 'succeeded', result.records.length, null, null,
+      )
+      broadcastChanged(ctx.now)
+      return c.json({ run, reused: false, imported: result.records.length })
+    } catch (error) {
+      const unsupported = error instanceof UnsupportedExternalSourceError
+      const malformed = error instanceof ExternalShapeError
+      if (parsed.data.mode === 'fixture') {
+        // Parsing happens before the ingest transaction. Preserve the exact
+        // fixture response even when its shape is rejected, so a failed sync
+        // remains inspectable and can be retried without asking the user to
+        // upload the source again.
+        for (const source of sourceList) {
+          let payload: unknown = null
+          try {
+            payload = parsed.data.payload !== undefined
+              ? parsed.data.payload
+              : bundledFixtureRequest(source).payload
+          } catch {
+            // A packaged build may omit an optional bundled fixture. Keep the
+            // failed run terminal and preserve a diagnostic fragment rather
+            // than throwing from the error handler and leaving `running`.
+          }
+          insertFragment(db, ctx, {
+            source: source === 'ruc.portal' ? 'calendar' : 'timetable',
+            rawType: 'structured',
+            rawText: JSON.stringify({
+              schema: 'flowpal.ruc.external-records.v1.failed',
+              source,
+              observedAt: ctx.now,
+              response: payload,
+              error: malformed ? 'external_shape_error' : 'sync_failed',
+            }),
+            device: 'ruc-sync',
+          })
+        }
+      }
+      const run = finishSyncRun(
+        db, ctx, started.run.id, unsupported ? 'unsupported' : 'failed', 0,
+        unsupported ? 'sync_connector_not_configured' : malformed ? 'external_shape_error' : 'sync_failed',
+        unsupported
+          ? '在线 RUC 连接器尚未接入；请使用显式离线样例或完成桌面端授权'
+          : malformed
+            ? 'RUC 返回的数据格式不符合当前版本，未覆盖已有条目'
+            : 'RUC 同步失败；保留上一次成功结果',
+      )
+      broadcastChanged(ctx.now)
+      return c.json({ run, reused: false })
+    }
   })
 
   // ── 项目 ────────────────────────────────────────────────────────────
@@ -389,10 +672,6 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
    */
   const SETTING_KEYS = ['chronotype_workday_wake', 'chronotype_restday_wake', 'onboarded_at'] as const
 
-  app.get('/api/settings', (c) => c.json({
-    settings: Object.fromEntries(SETTING_KEYS.map((k) => [k, getSetting(db, k)])),
-  }))
-
   app.patch('/api/settings', async (c) => {
     const ctx = ctxOf()
     const body = z.record(z.string(), z.string()).safeParse(await c.req.json())
@@ -449,7 +728,7 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
   const FocusBody = z.object({
     startedAt: z.string(),
     plannedMinutes: z.number().int().positive(),
-    actualMinutes: z.number().int().positive().nullable().optional(),
+    actualMinutes: z.number().int().nonnegative().nullable().optional(),
     endedEarly: z.boolean().optional(),
     itemId: z.string().nullable().optional(),
     projectId: z.string().nullable().optional(),
@@ -469,6 +748,45 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     clearNowCache(db)
     broadcastChanged(ctx.now)
     return c.json({ session }, 201)
+  })
+
+  // Target /focus lifecycle. The legacy /api/focus-sessions endpoint above is
+  // kept for A's demo seed and callers that only need the historical list.
+  app.get('/api/focus', (c) => c.json({ sessions: listFocusApiSessions(db) }))
+
+  app.post('/api/focus', async (c) => {
+    let body: unknown
+    try { body = await c.req.json() } catch { return c.json({ error: '专注参数不是合法 JSON' }, 400) }
+    const parsed = StartFocusRequest.safeParse(body)
+    if (!parsed.success) return c.json({ error: '专注参数不对', issues: parsed.error.issues }, 400)
+    if (parsed.data.itemId && !getItem(db, parsed.data.itemId)) {
+      return c.json({ error: '条目不存在' }, 404)
+    }
+    if (parsed.data.projectId && !getProject(db, parsed.data.projectId)) {
+      return c.json({ error: '项目不存在' }, 404)
+    }
+    const ctx = ctxOf()
+    const started = startFocusSessionResult(db, ctx, parsed.data)
+    broadcastChanged(ctx.now)
+    return c.json(started.response, started.reused ? 200 : 201)
+  })
+
+  app.get('/api/focus/:id', (c) => {
+    const response = getFocusSession(db, c.req.param('id'), ctxOf().now)
+    if (!response) return c.json({ error: '专注时段不存在' }, 404)
+    return c.json(response)
+  })
+
+  app.post('/api/focus/:id/end', async (c) => {
+    let body: unknown
+    try { body = await c.req.json() } catch { return c.json({ error: '结束参数不是合法 JSON' }, 400) }
+    const parsed = EndFocusRequest.safeParse(body)
+    if (!parsed.success) return c.json({ error: '结束参数不对', issues: parsed.error.issues }, 400)
+    const ctx = ctxOf()
+    const response = endFocusSession(db, ctx, c.req.param('id'), parsed.data)
+    if (!response) return c.json({ error: '专注时段不存在' }, 404)
+    broadcastChanged(ctx.now)
+    return c.json(response)
   })
 
   // ── 事件流 ──────────────────────────────────────────────────────────
@@ -554,4 +872,3 @@ function daysFrom(iso: string, n: number): string {
   const pad = (x: number) => String(x).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
-

@@ -1,5 +1,37 @@
 import type { NewFragment } from '../../store/fragments.ts'
 
+// The online login/transport remains Electron-owned.  These clean-room,
+// fixture-first adapters are intentionally re-exported here so callers do not
+// need to know the internal sync directory layout.
+export {
+  normalizePortalPayload,
+  parsePortalSchedule,
+} from '../../sync/portal-source.ts'
+export {
+  normalizeGraduatePayload,
+  parseGraduateTerms,
+  parseGraduateTimetable,
+  graduateTimetableRecords,
+} from '../../sync/graduate-source.ts'
+export {
+  ingestExternalRecords,
+  externalRecordToExtractedItem,
+  externalRecordsToBatches,
+} from '../../sync/structured-import.ts'
+export {
+  bundledFixtureRequest,
+  normalizeRucRequest,
+  runRucSync,
+  runRucSyncBatch,
+} from '../../sync/runner.ts'
+export type {
+  ExternalRecord,
+  GraduateTerm,
+  NormalizedGraduateTimetable,
+  RucOnlineBroker,
+  RucSyncRequest,
+} from '../../sync/index.ts'
+
 /**
  * 人大教务系统接入。
  *
@@ -14,7 +46,9 @@ import type { NewFragment } from '../../store/fragments.ts'
  *
  * 验收依据：同一个学号拉回来的课表行，与既有的 Flutter/Dart 实现逐行对齐。
  *
- * 待实现：照搬既有实现的登录鉴权与接口调用。
+ * 在线登录/鉴权仍由 Electron broker 提供；P0 的离线 parser/normalizer 与
+ * structured importer 已在 `src/sync/` 实现，故本模块不会把凭据或假在线成功
+ * 塞进 server。
  */
 export type RucCredentials = { studentId: string; password: string }
 

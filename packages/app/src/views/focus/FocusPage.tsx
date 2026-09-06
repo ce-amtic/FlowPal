@@ -5,8 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { nowInShanghai } from '@flowpal/shared'
 import { api, queryKeys } from '../../api.ts'
 import { transition } from '../../tokens/motion.ts'
-import { Pebble } from '../../pebble/Pebble.tsx'
-import type { Mood } from '../../pebble/shader.ts'
+import { PetHost } from '../../pet/PetHost.tsx'
+import { usePetStatus } from '../../pet/context.tsx'
 import { ErrorState } from '../../shell/State.tsx'
 import { Composer } from '../now/Composer.tsx'
 import './focus.css'
@@ -42,6 +42,7 @@ type Phase =
   | { name: 'ending'; startedAt: string; startedMs: number; endedMs: number }
 
 export function FocusPage() {
+  const { setStatus: setPetStatus } = usePetStatus()
   const target = useLocation().state?.focus as Target | undefined
   const [minutes, setMinutes] = useState(DEFAULT_MINUTES)
   const [phase, setPhase] = useState<Phase>({ name: 'ready' })
@@ -57,11 +58,15 @@ export function FocusPage() {
     return () => clearTimeout(id)
   }, [phase.name])
 
+  useEffect(() => {
+    setPetStatus(phase.name === 'running' ? 'focus' : phase.name === 'ending' ? 'done' : 'idle')
+  }, [phase.name, setPetStatus])
+
   if (!target) return <Blank />
 
   return (
     <div className="focus">
-      <Pebble size={112} mood={moodOf(phase.name, minutes)} />
+      <PetHost className="focus-pet" size={128} interactive={false} />
 
       {/*
         这一段是关于那件事的，不是关于那一步的。那一步的职责是把开始的门槛降下来，
@@ -181,14 +186,6 @@ function Dial({ minutes, onChange }: { minutes: number; onChange: (m: number) =>
  * 短的那一头必须是正面的表情。它是门槛最低的那个选择，产品在这里皱一下眉，
  * 就等于在劝人选长的——而劝人正是这个产品说好不做的事。
  */
-function moodOf(phase: Phase['name'], minutes: number): Mood {
-  if (phase === 'running') return 'focus'
-  if (phase === 'ending') return 'calm'
-  if (minutes <= 10) return 'happy'
-  if (minutes <= 35) return 'calm'
-  return 'focus'
-}
-
 /** 直接开 /focus 而不是从「此刻」进来。这时它不是一个模式，只是一条走空了的路 */
 function Blank() {
   return (

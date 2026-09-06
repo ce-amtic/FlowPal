@@ -35,9 +35,13 @@
   --accent: #b4622f;
   --accent-soft: rgba(180, 98, 47, 0.14);
   --accent-line: rgba(180, 98, 47, 0.4);
+  --on-accent: #fffaf6;
 
   --danger: #c0392b;
   --danger-soft: rgba(192, 57, 43, 0.12);
+  --danger-strong: #b24132;
+  --success: #55734a;
+  --success-soft: #6b9b59;
 
   /* 形象。它是一块实时绘制的软胶，所以颜色只能给 WebGL 一个纯色与一个阴影浓度 */
   --pebble: #c6c5be;
@@ -75,11 +79,17 @@
   --dur-base: 220ms;            /* 切换、展开、条目进出 */
   --dur-slow: 400ms;            /* 形象、整块转场 */
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  /*
+   * 桌宠的物理/传送阶段比通用三档略细，两个入口共用同一组值。桌宠 CSS 直接用
+   * 这几个变量：缺一个，animation 简写会整体失效，入场离场看起来像瞬移。
+   */
+  --dur-pet-depart: 280ms;
+  --dur-pet-teleport: 360ms;
+  --dur-pet-land: 260ms;
+  --dur-pet-hint: 180ms;
+  --shadow-pet-hint: 0 6px 18px rgb(0 0 0 / 12%);
   /* 循环指示器（转圈）。它不是转场，所以不在上面三档里，也不镜像进 motion.ts */
   --dur-spin: 1000ms;
-  /* 等待态那颗球：一次呼吸，与绕行一周。比转圈慢得多——它要的是安静，不是催促 */
-  --dur-orb-breath: 2600ms;
-  --dur-orb-turn: 5200ms;
 
   /* ── 结构 ─────────────────────────────────────────────── */
   /*
@@ -118,9 +128,13 @@
     --accent: #e08b56;
     --accent-soft: rgba(224, 139, 86, 0.16);
     --accent-line: rgba(224, 139, 86, 0.45);
+    --on-accent: #211b17;
 
     --danger: #e57365;
     --danger-soft: rgba(229, 115, 101, 0.14);
+    --danger-strong: #f09a8c;
+    --success: #a7c99a;
+    --success-soft: #8dbb7e;
 
     --pebble: #8e8d86;
     --pebble-shadow: 0.34;
@@ -141,9 +155,11 @@
     --dur-fast: 1ms;
     --dur-base: 1ms;
     --dur-slow: 1ms;
+    --dur-pet-depart: 1ms;
+    --dur-pet-teleport: 1ms;
+    --dur-pet-land: 1ms;
+    --dur-pet-hint: 1ms;
     /* 转圈不归零：它是「正在做事」的唯一提示，停下来等于没有反馈。放慢即可 */
     --dur-spin: 2400ms;
-    --dur-orb-breath: 6000ms;
-    --dur-orb-turn: 12000ms;
   }
 }

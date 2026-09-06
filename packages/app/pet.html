@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="transparent" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none';" />
+    <title>FlowPal 桌宠</title>
+  </head>
+  <body>
+    <main id="pet-root" aria-label="FlowPal 桌宠">
+      <canvas id="pet">请使用支持 Canvas 的浏览器。</canvas>
+      <p id="pet-fallback" class="pet-fallback" hidden>
+        3D 桌宠暂时不可用；仍可继续使用 FlowPal。
+      </p>
+      <p id="pet-status" class="pet-status" role="status" aria-live="polite">在这里</p>
+      <p id="pet-hint" class="pet-hint" role="status" aria-live="polite" hidden>
+        有新点子吗？告诉我吧，或者把任务拖给我～
+      </p>
+    </main>
+    <script type="module" src="/src/pet/main.ts"></script>
+  </body>
+</html>

@@ -287,7 +287,7 @@ function run(fragmentId: string, over: Partial<Run> = {}): Run {
     status: 'done',
     startedAt: f.createdAt,
     finishedAt: f.createdAt,
-    message: '接住了。原文已存。',
+    message: '已记下。原文已存。',
     counts: { created: 1, updated: 0, dropped: 0, needsConfirm: 0 },
     ...over,
   }
