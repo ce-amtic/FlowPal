@@ -24,22 +24,45 @@ export type Turn = { key: string; asked: string; runId: string }
 export function Conversation({ turns, onClear }: { turns: Turn[]; onClear: () => void }) {
   const latest = turns[turns.length - 1]?.key
   const end = useRef<HTMLDivElement>(null)
-
+  const section = useRef<HTMLElement>(null)
   /*
-   * 新的一轮追加在整页最末尾，而人的视线还在上面那张卡上。不把他带过去，一次
-   * 投放在屏幕上就是什么都没发生——从桌宠拖进来的尤其如此，那时候他连滚都想不起来滚。
+   * 视线是不是还贴在最底下。
    *
-   * 只在「又多了一轮」时滚，不在这一轮的内容长出来时滚：回复是一段一段流进来的，
-   * 每次都追下去会把正在读的那行不停往上推。
+   * 一轮刚追加时它是空的——只有一行小字和加载动画——回复随后一段段流进来，块一直
+   * 往下长。只在追加的那一刻滚一次，停的位置就在正文中间。所以这里是「跟住」而不是
+   * 「跳一次」：贴住之后内容长多少就跟多少，用户自己一滚就松开，不跟他抢。
    */
+  const stuck = useRef(false)
+
   useEffect(() => {
     if (latest === undefined) return
+    stuck.current = true
     end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [latest])
 
+  useEffect(() => {
+    const el = section.current
+    if (el === null) return
+    const follow = () => {
+      if (!stuck.current) return
+      end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+    const release = () => { stuck.current = false }
+    const observer = new ResizeObserver(follow)
+    observer.observe(el)
+    // 平滑滚动本身不产生 wheel/touchmove，所以这两个事件确实代表「人动手了」
+    window.addEventListener('wheel', release, { passive: true })
+    window.addEventListener('touchmove', release, { passive: true })
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('wheel', release)
+      window.removeEventListener('touchmove', release)
+    }
+  }, [turns.length > 0])
+
   if (turns.length === 0) return null
   return (
-    <section className="talk">
+    <section className="talk" ref={section}>
       <div className="talk-head">
         <h2 className="group-label">回复</h2>
         <button className="quiet" onClick={onClear}>清空</button>

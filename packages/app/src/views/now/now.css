@@ -10,7 +10,7 @@
  */
 .now-head {
   position: relative;
-  margin: 0 0 var(--space-10);
+  margin: 0 0 var(--space-6);
 }
 
 /*
@@ -200,20 +200,25 @@ button.primary:hover { opacity: 0.88; }
 
 /* ── 接下来 ─────────────────────────────────────────────── */
 
-.upcoming { margin-top: var(--space-10); }
+/* 它是「今天」的一句脚注，不是一个新的大块，所以贴着上面那一组 */
+.upcoming { margin-top: var(--space-3); }
 
 /*
  * 今天剩下的时间。时刻一列等宽对齐，右边是事情和它为什么在这里。
  * 课那几行只是坐标，字色退一档；排进去的事务是可点的，和别处的条目一样。
  */
-.day-plan { margin-top: var(--space-10); }
+.day-plan { margin-top: var(--space-8); }
 
+/*
+ * 上下留白只给一次。这也是个 li，.plain-list 已经给过一份内边距了，这里再给一份
+ * 会叠成两倍——今天那几行之间因此空得像分了组。
+ */
 .plan-slot {
   display: flex;
   align-items: baseline;
   gap: var(--space-3);
   min-height: var(--target-min);
-  padding: var(--space-2) 0;
+  padding: 0;
 }
 
 .plan-time {
