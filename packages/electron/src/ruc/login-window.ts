@@ -36,9 +36,18 @@ export async function signInToRuc(serverUrl: string, token: string | null): Prom
     autoHideMenuBar: true,
     webPreferences: { partition: PARTITION },
   })
-  await win.loadURL(ENTRY)
-
   try {
+    /*
+     * 门户会立刻把这一跳重定向到 CAS，而 Electron 把「这次导航被下一次取代」也
+     * 报成 ERR_ABORTED——正常流程的第一步于是长得像加载失败。
+     *
+     * 判据始终是探针跟完重定向之后停在哪儿，不是这一次 loadURL 成没成，所以这里
+     * 只放过「被取代」这一种，真的开不出页面照样抛。
+     */
+    await win.loadURL(ENTRY).catch((cause: unknown) => {
+      if (!isSupersededNavigation(cause)) throw cause
+    })
+
     const signedIn = await waitForSession(rucSession, win)
     if (!signedIn) return { ok: false, message: '登录窗口关闭了，没有完成登录' }
 
@@ -68,6 +77,19 @@ export async function signInToRuc(serverUrl: string, token: string | null): Prom
   } finally {
     if (!win.isDestroyed()) win.close()
   }
+}
+
+/**
+ * 这一次导航是被后一次顶掉的，不是失败。
+ *
+ * 重定向链上 ERR_ABORTED(-3) 是常态。Electron 版本之间这个错误有时带 `code`、
+ * 有时只在 message 里，所以两处都认——认的是同一件事，不是两种猜测。
+ */
+function isSupersededNavigation(cause: unknown): boolean {
+  if (typeof cause !== 'object' || cause === null) return false
+  const { code, message } = cause as { code?: unknown; message?: unknown }
+  return code === 'ERR_ABORTED'
+    || (typeof message === 'string' && message.includes('ERR_ABORTED'))
 }
 
 /**
