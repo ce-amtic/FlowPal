@@ -55,25 +55,6 @@ export const ModelConfig = z.object({
 })
 export type ModelConfig = z.infer<typeof ModelConfig>
 
-/**
- * 学校邮箱。人大的邮箱是网易企业邮箱的一份部署，IMAP 在 `imap.ruc.edu.cn:993`。
- *
- * **password 是邮箱设置里那串「客户端授权码」，不是登录密码。** 网易那套默认不许
- * 拿登录密码走 IMAP，填错了只会得到一句认证失败，看不出是这个原因。
- *
- * 这是全程序唯一存密码的地方，因为 IMAP 没有别的凭据形式。门户那条路不存密码，
- * 见 sync/cookies.ts。不配这一段则整条邮件来源不跑，设置页显示「未配置」。
- */
-export const MailConfig = z.object({
-  host: z.string().default('imap.ruc.edu.cn'),
-  port: z.number().int().default(993),
-  user: z.string(),
-  password: z.string(),
-  /** 一次同步至多读几封。读邮件要过模型，配额就是花销的上限 */
-  perRun: z.number().int().nonnegative().default(3),
-})
-export type MailConfig = z.infer<typeof MailConfig>
-
 export const SyncConfig = z.object({
   /**
    * 一次同步至多把几条通知公告送进 agent 循环。
@@ -105,8 +86,11 @@ export const ServerConfig = z.object({
     /** 图片不走 OCR，直接交视觉模型 */
     vision: ModelConfig,
   }),
+  /**
+   * 邮箱账号不在这里，在库里（`mail_accounts` 表），因为它要能在设置页上随时增删改。
+   * 配置文件里剩下的都是启动时定死、运行中不改的东西。
+   */
   sync: SyncConfig.default({ noticesPerRun: 3, intervalMinutes: 360 }),
-  mail: MailConfig.nullable().default(null),
 })
 export type ServerConfig = z.infer<typeof ServerConfig>
 

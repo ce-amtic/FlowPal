@@ -161,6 +161,40 @@ export type SyncStatus = {
   signedInAt: string | null
 }
 
+/**
+ * 一个邮箱账号。
+ *
+ * **既没有密文也没有明文。** 密文只在桌面端与 server 之间走，界面没有任何理由
+ * 见到它；明文只在用户刚打完字的那一刻存在于表单里，送出去就没了。
+ */
+export type MailAccount = {
+  id: string
+  host: string
+  port: number
+  username: string
+  /** 一轮至多读几封。读邮件要过模型，这是花销上限 */
+  perRun: number
+  enabled: boolean
+  /**
+   * server 手上有没有这个账号的授权码明文。
+   *
+   * 冷启动之后由桌面端解密推进来。为假时这个账号这一轮会被跳过，设置页显示
+   * 「需要在桌面应用里解锁」——那与「授权码不对」是两回事，下一步也不同。
+   */
+  unlocked: boolean
+}
+
+export type NewMailAccount = {
+  host: string
+  port: number
+  username: string
+  /** 系统钥匙串加密后的 base64。落库的是它 */
+  passwordCipher: string
+  /** 同一串授权码的明文。只进 server 的内存，不落库 */
+  password: string
+  perRun: number
+}
+
 export type Api = {
   listItems: () => Promise<{ items: ItemWithSources[] }>
   getItem: (id: string) => Promise<{ item: ItemWithSources; history: ItemHistoryRow[] }>
@@ -187,6 +221,14 @@ export type Api = {
   /** 现在就同步一次。正在跑时服务端回 409，调用方不重试——那一轮会把活干完 */
   syncNow: () => Promise<{ state: string; message: string; status: SyncStatus }>
   signOutOfRuc: () => Promise<{ status: SyncStatus }>
+  listMailAccounts: () => Promise<{ accounts: MailAccount[] }>
+  addMailAccount: (account: NewMailAccount) => Promise<{ account: MailAccount }>
+  patchMailAccount: (
+    id: string, patch: Partial<NewMailAccount> & { enabled?: boolean },
+  ) => Promise<{ account: MailAccount }>
+  removeMailAccount: (id: string) => Promise<{ accounts: MailAccount[] }>
+  /** 当场连一次。主机写错、端口不对、授权码填成登录密码，在状态行上长得一样 */
+  testMailAccount: (id: string) => Promise<{ ok: boolean; unseen?: number; message?: string }>
   postFocusSession: (session: NewFocusSession) => Promise<{ session: { id: string } }>
   /**
    * 把一张图的字节存进库目录，拿回它的绝对路径。
@@ -228,6 +270,13 @@ const realApi: Api = {
   getSyncStatus: () => call('/api/sync'),
   syncNow: () => call('/api/sync', { method: 'POST' }),
   signOutOfRuc: () => call('/api/sync/session', { method: 'DELETE' }),
+  listMailAccounts: () => call('/api/mail-accounts'),
+  addMailAccount: (account) =>
+    call('/api/mail-accounts', { method: 'POST', body: JSON.stringify(account) }),
+  patchMailAccount: (id, patch) =>
+    call(`/api/mail-accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  removeMailAccount: (id) => call(`/api/mail-accounts/${id}`, { method: 'DELETE' }),
+  testMailAccount: (id) => call(`/api/mail-accounts/${id}/test`, { method: 'POST' }),
   postFocusSession: (session) =>
     call('/api/focus-sessions', { method: 'POST', body: JSON.stringify(session) }),
   uploadImage: (contentType, base64) =>
@@ -259,4 +308,5 @@ export const queryKeys = {
   thoughts: ['thoughts'] as const,
   settings: ['settings'] as const,
   sync: ['sync'] as const,
+  mailAccounts: ['mail-accounts'] as const,
 }

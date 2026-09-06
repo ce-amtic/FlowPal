@@ -164,4 +164,29 @@ CREATE TABLE IF NOT EXISTS now_cache (
   payload    TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+-- 邮箱账号。可以有多个（学校的、私人的），各自一份进度水位。
+--
+-- **这张表里没有明文密码，而且这个进程解不开 password_cipher。** 密文由桌面端用
+-- 系统钥匙串加的，钥匙在钥匙串里，不在库里也不在代码里。明文只在 server 进程的
+-- 内存里存在（sync/secrets.ts），由桌面端启动时解一次密推进来，进程退出即无。
+-- 所以拿到这个 .db 文件不等于拿到授权码。
+CREATE TABLE IF NOT EXISTS mail_accounts (
+  id              TEXT PRIMARY KEY,
+  host            TEXT NOT NULL,
+  port            INTEGER NOT NULL,
+  username        TEXT NOT NULL,
+  password_cipher TEXT NOT NULL,             -- base64，系统钥匙串加密后的密文
+  per_run         INTEGER NOT NULL,          -- 一轮至多读几封。读邮件要过模型，这是花销上限
+  enabled         INTEGER NOT NULL DEFAULT 1,
+  -- 已经处理到的最大 UID。**按账号存**：UID 只在一个邮箱里有意义，
+  -- 两个邮箱共用一个水位会让其中一个整段跳过。
+  watermark       INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+-- 同一个邮箱不该加两遍：加重了会把每封信喂两次模型，而这只在账单上看得出来。
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_accounts_who
+  ON mail_accounts(host, username COLLATE NOCASE);
 `

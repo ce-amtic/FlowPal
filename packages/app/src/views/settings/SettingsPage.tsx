@@ -1,198 +1,79 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, queryKeys, type Settings, type SyncStatus } from '../../api.ts'
-import { bridge } from '../../bridge.ts'
-import { CHRONOTYPE } from '../../lib/chronotype.ts'
-import { formatDay, formatTime } from '../../lib/format.ts'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { api, queryKeys } from '../../api.ts'
 import { ErrorState, Loading } from '../../shell/State.tsx'
+import { ChronotypeGroup } from './ChronotypeGroup.tsx'
+import { PortalGroup } from './PortalGroup.tsx'
+import { MailGroup } from './MailGroup.tsx'
 import './settings.css'
 
 /**
  * 设置。
  *
- * 只放真的能改的东西。作息两问在首次启动时问过一次，之后就只有这里能改；改完会让
- * 「此刻」重新判断，它算处境时读的正是这两个答案。
+ * 分组走左侧导航而不是一路平铺：邮箱可以有好几个，每个还能展开成一张表单，平铺
+ * 之后这一页会长到要滚很久，而用户来这里通常只为改一件事。
  *
- * 另一半是外部来源：登录一次学校门户，之后课表、校历、通知自己进来。这一段在这里
- * 而不在别处，是因为同步**失败时不重试也不弹东西**，那它就必须有一个用户想起来
- * 会去看的地方。
+ * 三组之外不放别的。模型配置在 config.local.json 里、运行中改不了，摆一行点不动
+ * 的出来只会让人以为它坏了。
  */
-export function SettingsPage() {
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: queryKeys.settings,
-    queryFn: api.getSettings,
-  })
-  const queryClient = useQueryClient()
+type GroupId = 'chronotype' | 'portal' | 'mail'
 
-  const save = useMutation({
-    mutationFn: (patch: Partial<Record<keyof Settings, string>>) => api.patchSettings(patch),
-    onSuccess: () => queryClient.invalidateQueries(),
-  })
+const GROUPS: { id: GroupId; label: string }[] = [
+  { id: 'chronotype', label: '作息' },
+  { id: 'portal', label: '人大门户' },
+  { id: 'mail', label: '邮箱' },
+]
+
+export function SettingsPage() {
+  const [picked, setPicked] = useState<GroupId>('chronotype')
+
+  // 导航上的那一行小字（「已登录」「2 个邮箱」）跟内容用同一份数据，所以在这里取。
+  const sync = useQuery({ queryKey: queryKeys.sync, queryFn: api.getSyncStatus })
+  const mail = useQuery({ queryKey: queryKeys.mailAccounts, queryFn: api.listMailAccounts })
+
+  const hint = (id: GroupId): string => {
+    if (id === 'portal') return sync.data === undefined ? '' : sync.data.signedIn ? '已登录' : '未登录'
+    if (id === 'mail') {
+      const accounts = mail.data?.accounts ?? []
+      if (accounts.length === 0) return '未添加'
+      const locked = accounts.filter((a) => !a.unlocked).length
+      return locked > 0 ? `${locked} 个待解锁` : `${accounts.length} 个`
+    }
+    return ''
+  }
 
   return (
     <>
       <h1 className="page-title">设置</h1>
 
-      {isLoading && <Loading />}
-      {error && <ErrorState error={error} onRetry={() => refetch()} />}
-
-      {data && (
-        <section className="group">
-          <h2 className="group-label">作息</h2>
-          {/*
-            说它拿去做什么，不说它怎么算。用户要判断的是「值不值得答」，
-            而不是我们内部怎么用这两个数。
-          */}
-          <p className="settings-note">用来估你一天里精力在哪个位置。</p>
-
-          {[CHRONOTYPE.workday, CHRONOTYPE.restday].map((q) => (
-            <div className="settings-field" key={q.key}>
-              <p className="settings-question">{q.question}</p>
-              <div className="choices">
-                {q.options.map((option) => (
-                  <button
-                    key={option}
-                    className={data.settings[q.key] === option ? 'choice picked' : 'choice'}
-                    disabled={save.isPending}
-                    onClick={() => save.mutate({ [q.key]: option })}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
+      <div className="settings">
+        <nav className="settings-nav">
+          {GROUPS.map((group) => (
+            <button
+              key={group.id}
+              className={group.id === picked ? 'settings-tab picked' : 'settings-tab'}
+              onClick={() => setPicked(group.id)}
+            >
+              <span>{group.label}</span>
+              <span className="settings-tab-hint">{hint(group.id)}</span>
+            </button>
           ))}
+        </nav>
 
-          {/*
-            差值才是有用的那个信号：差得越多，说明平时越是被闹钟叫醒的。
-            这句话不写在界面上——它是我们怎么用，不是用户要读的。
-          */}
-          <p className="settings-note">
-            {save.isPending ? '正在记下' : '这两个时间之间的差别，比它们各自是几点更有用。'}
-          </p>
-          {save.error && <ErrorState error={save.error} />}
-        </section>
-      )}
-
-      <SyncSection />
+        <div className="settings-pane">
+          {picked === 'chronotype' && <ChronotypeGroup />}
+          {picked === 'portal' && (
+            sync.isLoading ? <Loading />
+              : sync.error ? <ErrorState error={sync.error} onRetry={() => void sync.refetch()} />
+                : sync.data ? <PortalGroup status={sync.data} /> : null
+          )}
+          {picked === 'mail' && (
+            mail.isLoading ? <Loading />
+              : mail.error ? <ErrorState error={mail.error} onRetry={() => void mail.refetch()} />
+                : <MailGroup accounts={mail.data?.accounts ?? []} />
+          )}
+        </div>
+      </div>
     </>
   )
-}
-
-function SyncSection() {
-  const queryClient = useQueryClient()
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: queryKeys.sync,
-    queryFn: api.getSyncStatus,
-  })
-
-  const signIn = useMutation({
-    mutationFn: async () => {
-      const result = await bridge.signInToRuc()
-      if (!result.ok) throw new Error(result.message)
-      return result
-    },
-    onSuccess: () => queryClient.invalidateQueries(),
-  })
-
-  const sync = useMutation({
-    mutationFn: api.syncNow,
-    onSuccess: () => queryClient.invalidateQueries(),
-  })
-
-  const signOut = useMutation({
-    mutationFn: api.signOutOfRuc,
-    onSuccess: () => queryClient.invalidateQueries(),
-  })
-
-  const busy = signIn.isPending || sync.isPending || signOut.isPending
-
-  return (
-    <section className="group">
-      <h2 className="group-label">外部来源</h2>
-      {/*
-        说它会拿到什么，不说它怎么拿。用户要判断的是「值不值得登录」。
-      */}
-      <p className="settings-note">
-        登录一次学校门户，课表、校历与通知就会自己进来，之后每几小时对一次。
-      </p>
-
-      {isLoading && <Loading />}
-      {error && <ErrorState error={error} onRetry={() => refetch()} />}
-
-      {data && (
-        <>
-          {/*
-            一轮同步要按周打十几次门户，几十秒才回来。不说这一句的话，那几十秒里
-            页面上什么都不动，与坏掉了长得一样。
-          */}
-          <p className="settings-status">{busy ? working(signIn.isPending) : describe(data)}</p>
-
-          <div className="choices">
-            <button className="choice" disabled={busy} onClick={() => signIn.mutate()}>
-              {data.signedIn ? '重新登录' : '登录人大门户'}
-            </button>
-            {data.signedIn && (
-              <button className="choice" disabled={busy} onClick={() => sync.mutate()}>
-                现在同步
-              </button>
-            )}
-            {data.signedIn && (
-              <button className="choice" disabled={busy} onClick={() => signOut.mutate()}>
-                退出登录
-              </button>
-            )}
-          </div>
-
-          {/*
-            逐条列出来，因为三路来源各自会因为不同的原因停下：邮件没配、通知配额
-            用完、门户登录态过期。只报一句总的「同步失败」，用户查不出该动哪一处。
-          */}
-          {data.sources.length > 0 && (
-            <ul className="settings-sources">
-              {data.sources.map((source) => (
-                <li key={source.label}>
-                  <span>{source.label}</span>
-                  {/* 没开的那一路弱化，坏了的那一路不弱化——一个不用管，一个要管 */}
-                  <span className={source.state === 'idle' ? 'settings-source-idle' : ''}>
-                    {source.note ?? `新增 ${source.created} · 更新 ${source.updated}`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-
-      {signIn.error && <ErrorState error={signIn.error} />}
-      {sync.error && <ErrorState error={sync.error} />}
-      {signOut.error && <ErrorState error={signOut.error} />}
-    </section>
-  )
-}
-
-function working(signingIn: boolean): string {
-  return signingIn
-    ? '登录窗口已经打开，在那里完成登录。'
-    : '正在对课表与校历，要几十秒。'
-}
-
-/**
- * 一行状态。
- *
- * 「还没登录」与「登录过但过期了」要分开说：前者是用户还没做过这件事，后者是他做过
- * 而它失效了——两句话之后要按的按钮不一样，合成一句「未登录」就把这个区别丢了。
- */
-function describe(status: SyncStatus): string {
-  const when = status.at === null ? null : `${formatDay(status.at)} ${formatTime(status.at)}`
-
-  switch (status.state) {
-    case 'never':
-      return status.signedIn ? '已登录，还没有同步过。' : '还没有登录。'
-    case 'expired':
-      return status.signedIn ? `上次同步 ${when} · 登录已过期，重新登录一次即可。` : '还没有登录。'
-    case 'error':
-      return `上次同步 ${when} · ${status.message ?? '没能完成'}`
-    case 'ok':
-      return `上次同步 ${when} · ${status.message ?? ''}`
-  }
 }

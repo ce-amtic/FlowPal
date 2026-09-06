@@ -78,8 +78,6 @@ const KEY = {
   scheduleFragment: 'sync_schedule_fragment',
   /** 已经处理过的通知里最新的那条的发布时刻 */
   noticeWatermark: 'sync_notice_watermark',
-  /** 已经处理过的邮件里最大的那个 UID */
-  mailWatermark: 'sync_mail_watermark',
 } as const
 
 export function readSyncStatus(db: DatabaseSync, signedIn: boolean): SyncStatus {
@@ -136,11 +134,3 @@ export function setNoticeWatermark(db: DatabaseSync, ctx: Ctx, at: string): void
   setSetting(db, ctx, KEY.noticeWatermark, at)
 }
 
-export function mailWatermark(db: DatabaseSync): number {
-  const raw = getSetting(db, KEY.mailWatermark)
-  return raw === null ? 0 : Number(raw)
-}
-
-export function setMailWatermark(db: DatabaseSync, ctx: Ctx, uid: number): void {
-  setSetting(db, ctx, KEY.mailWatermark, String(uid))
-}

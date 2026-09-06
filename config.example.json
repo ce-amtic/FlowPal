@@ -57,6 +57,5 @@
   "sync": {
     "noticesPerRun": 3,
     "intervalMinutes": 360
-  },
-  "mail": null
+  }
 }

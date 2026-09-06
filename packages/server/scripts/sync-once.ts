@@ -6,6 +6,7 @@ import { ServerConfig } from '../src/config.ts'
 import { loadConfig } from '../src/index.ts'
 import { openDb } from '../src/store/db.ts'
 import { RucCookies, runSync } from '../src/sync/index.ts'
+import { MailSecrets } from '../src/sync/secrets.ts'
 
 /**
  * 现跑一次同步，打印结果。`pnpm sync:once`。
@@ -27,7 +28,13 @@ const cookies = RucCookies.open(join(config.dataDir, 'ruc-cookies.json'))
 console.log(`学期 ${ctx.term.name}（${ctx.term.startMonday} 起 ${ctx.term.weeks} 周）`)
 console.log(cookies.isEmpty ? '还没有登录态' : '有登录态')
 
-const result = await runSync({ db, ctx, config, cookies, onChanged: () => {} })
+/*
+ * 这里没有解开的邮箱授权码，也不该有：密文的钥匙在系统钥匙串里，只有桌面端拿得到。
+ * 所以这个脚本验的是门户那两路，邮箱那几行会显示「需要在桌面应用里解锁」。
+ */
+const result = await runSync({
+  db, ctx, config, cookies, secrets: new MailSecrets(), onChanged: () => {},
+})
 
 console.log(`\n${result.state}：${result.message}`)
 for (const source of result.sources) {

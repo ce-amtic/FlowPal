@@ -27,6 +27,12 @@ import { extract } from '../pipeline/extract.ts'
 import { mapStructured } from '../pipeline/map-structured.ts'
 import { applyMapped } from '../sync/apply.ts'
 import { markSignedIn, readSyncStatus, RucCookies, runSync } from '../sync/index.ts'
+import { MailSecrets } from '../sync/secrets.ts'
+import { testMailbox } from '../sync/mail.ts'
+import {
+  createMailAccount, deleteMailAccount, getMailAccount, listMailAccounts, updateMailAccount,
+} from '../store/mail-accounts.ts'
+import type { MailAccount } from '../store/mail-accounts.ts'
 import { buildContext } from '../context/build.ts'
 import { callJson } from '../llm/client.ts'
 import { runAgentLoop, type AgentLoopEvent } from '../agent/loop.ts'
@@ -52,6 +58,8 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
 
   /** 学校系统的登录态。落在 dataDir 里，冷启动不用重新登录。 */
   const cookies = RucCookies.open(join(config.dataDir, 'ruc-cookies.json'))
+  /** 邮箱授权码的明文。只在内存里，进程退出即无。 */
+  const secrets = new MailSecrets()
   let syncing = false
 
   // ── 跨窗口广播 ──────────────────────────────────────────────────────
@@ -468,6 +476,137 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     return c.json({ status: readSyncStatus(db, false) })
   })
 
+  // ── 邮箱账号 ────────────────────────────────────────────────────────
+  /*
+   * 账号住在库里而不是配置文件里，因为它要能在设置页上随时增删改。
+   *
+   * **盘上只有密文，内存里才有明文。** 密文由桌面端用系统钥匙串加好再送来，
+   * 这个进程解不开它——server 不依赖 Electron，钥匙也不在库里。明文单独走一趟，
+   * 落在 secrets 那个 Map 里，进程退出即无。所以：
+   *
+   *   - 新加 / 改密码：界面同时送密文与明文。同一条 localhost 请求里两样都有，
+   *     看着多余，其实不是——加密防的是**盘上**被读走，不是这一跳。
+   *   - 冷启动：桌面端把库里的密文解开一批，POST 到 /unlock。
+   *   - `pnpm dev:server` 单跑：没有能解钥匙串的东西，于是没有明文，邮箱那一路
+   *     明说「需要在桌面应用里解锁」。这是对的，不是缺陷。
+   */
+  const MailAccountBody = z.object({
+    host: z.string().min(1),
+    port: z.number().int().positive(),
+    username: z.string().min(1),
+    /** base64，系统钥匙串加密后的密文。落库的是它 */
+    passwordCipher: z.string().min(1),
+    /** 同一串授权码的明文。只进内存，不落库 */
+    password: z.string().min(1),
+    perRun: z.number().int().nonnegative(),
+  })
+
+  /** 返回给界面的账号。**永远不带密文，也永远不带明文。** */
+  const publicAccount = (a: MailAccount) => ({
+    id: a.id,
+    host: a.host,
+    port: a.port,
+    username: a.username,
+    perRun: a.perRun,
+    enabled: a.enabled,
+    /** 这个进程手上有没有它的明文。没有就是「需要在桌面应用里解锁」 */
+    unlocked: secrets.has(a.id),
+  })
+
+  app.get('/api/mail-accounts', (c) =>
+    c.json({ accounts: listMailAccounts(db).map(publicAccount) }))
+
+  /**
+   * 桌面端专用：连密文一起拿走，好把它交给系统钥匙串解开。
+   *
+   * 与上面那条分开，是为了让「界面要的」和「桌面端要的」在类型上就不是一回事——
+   * 密文没有任何理由出现在渲染进程里。
+   */
+  app.get('/api/mail-accounts/locked', (c) => c.json({
+    accounts: listMailAccounts(db)
+      .filter((a) => a.enabled && !secrets.has(a.id))
+      .map((a) => ({ id: a.id, passwordCipher: a.passwordCipher })),
+  }))
+
+  app.post('/api/mail-accounts/unlock', async (c) => {
+    const body = z.record(z.string(), z.string()).safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '解锁参数不对', issues: body.error.issues }, 400)
+
+    for (const [id, password] of Object.entries(body.data)) {
+      if (getMailAccount(db, id) === null) return c.json({ error: `邮箱账号不存在：${id}` }, 404)
+      secrets.unlock(id, password)
+    }
+    broadcastChanged(ctxOf().now)
+    return c.json({ accounts: listMailAccounts(db).map(publicAccount) })
+  })
+
+  app.post('/api/mail-accounts', async (c) => {
+    const ctx = ctxOf()
+    const body = MailAccountBody.safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '邮箱参数不对', issues: body.error.issues }, 400)
+
+    const { password, ...stored } = body.data
+    let account: MailAccount
+    try {
+      account = createMailAccount(db, ctx, stored)
+    } catch (e) {
+      // 唯一索引撞了：同一个邮箱加两遍会把每封信喂两次模型，而那只在账单上看得出来。
+      const message = e instanceof Error && e.message.includes('UNIQUE')
+        ? `${stored.username} 已经加过了`
+        : e instanceof Error ? e.message : String(e)
+      return c.json({ error: message }, 409)
+    }
+    secrets.unlock(account.id, password)
+    broadcastChanged(ctx.now)
+    return c.json({ account: publicAccount(account) })
+  })
+
+  app.patch('/api/mail-accounts/:id', async (c) => {
+    const ctx = ctxOf()
+    const id = c.req.param('id')
+    if (getMailAccount(db, id) === null) return c.json({ error: '邮箱账号不存在' }, 404)
+
+    // 改密码时两样一起给；只改端口之类时两样都不给。给一半是错的，说清楚。
+    const body = MailAccountBody.partial().safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '邮箱参数不对', issues: body.error.issues }, 400)
+    const { password, ...patch } = body.data
+    if ((password === undefined) !== (patch.passwordCipher === undefined)) {
+      return c.json({ error: '改授权码要同时给密文与明文' }, 400)
+    }
+
+    const account = updateMailAccount(db, ctx, id, patch)
+    if (password !== undefined) secrets.unlock(id, password)
+    broadcastChanged(ctx.now)
+    return c.json({ account: publicAccount(account) })
+  })
+
+  app.delete('/api/mail-accounts/:id', (c) => {
+    const id = c.req.param('id')
+    deleteMailAccount(db, id)
+    secrets.forget(id)
+    broadcastChanged(ctxOf().now)
+    return c.json({ accounts: listMailAccounts(db).map(publicAccount) })
+  })
+
+  /**
+   * 连一次试试。
+   *
+   * 加账号的时候当场问一次，比等六小时后在状态行上看见一句「同步失败」有用得多：
+   * 主机写错、端口不对、授权码填成了登录密码，三种在状态行上长得一模一样，而
+   * 下一步完全不同。
+   */
+  app.post('/api/mail-accounts/:id/test', async (c) => {
+    const account = getMailAccount(db, c.req.param('id'))
+    if (account === null) return c.json({ error: '邮箱账号不存在' }, 404)
+    const password = secrets.get(account.id)
+    if (password === null) return c.json({ error: '需要在桌面应用里解锁' }, 409)
+    try {
+      return c.json({ ok: true, ...(await testMailbox(account, password)) })
+    } catch (e) {
+      return c.json({ ok: false, message: e instanceof Error ? e.message : String(e) })
+    }
+  })
+
   /**
    * 同步一次。启动、六小时的定时、设置页的按钮，三个触发点都打这一个口。
    *
@@ -481,7 +620,7 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     const ctx = ctxOf()
     try {
       const result = await runSync({
-        db, ctx, config, cookies, onChanged: () => broadcastChanged(ctx.now),
+        db, ctx, config, cookies, secrets, onChanged: () => broadcastChanged(ctx.now),
       })
       return c.json({ ...result, status: readSyncStatus(db, !cookies.isEmpty) })
     } finally {

@@ -1,4 +1,60 @@
-/* 设置。竖向节奏跟全 App 一致：问题与它的选项贴着，两个问题之间断开 */
+/* 设置。左侧一列分组，右侧是选中那组的内容 */
+
+.settings {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: var(--space-8);
+  align-items: start;
+}
+
+/* 窗口窄到放不下两列时，导航横过来排一行。最小宽度 480px 时左栏会挤到只剩半个字 */
+@media (max-width: 620px) {
+  .settings {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .settings-tab-hint { display: none; }
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* 选中那一项靠底色区分，不靠字重——一列字里只有一个变粗，看起来像是没对齐 */
+.settings-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-box);
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-tab:hover { background: var(--field); color: var(--fg); }
+.settings-tab.picked { background: var(--accent-soft); color: var(--accent); }
+
+/* 导航上的那行小字回答「这组要不要我管」，所以停用与待办要看得见 */
+.settings-tab-hint {
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+.settings-tab.picked .settings-tab-hint { color: var(--accent); opacity: 0.7; }
+
+.settings-pane { min-width: 0; }
 
 .settings-note {
   margin: 0;
@@ -21,13 +77,13 @@
   margin-top: var(--space-8);
 }
 
-/* 同步状态那一行。用正文色而不是弱色：它是这一节里唯一要读的那句话 */
+/* 状态那一行。用 fg-dim 而不是 faint：它是这一组里唯一要读的那句话 */
 .settings-status {
   margin: var(--space-5) 0 var(--space-3);
   color: var(--fg-dim);
 }
 
-/* 三路来源各占一行，名字在左、结果在右，扫一眼就知道是哪一路停了 */
+/* 各路来源一行一条，名字在左、结果在右，扫一眼就知道是哪一路停了 */
 .settings-sources {
   margin: var(--space-5) 0 0;
   padding: 0;
@@ -43,5 +99,73 @@
   padding: var(--space-2) 0;
 }
 
-/* 没做成的那一路弱化，不标红：未配置的邮件不是错误，只是没开 */
+/* 没开的那一路弱化，不标红：未解锁的邮箱不是错误，只是这一轮没跑 */
 .settings-source-idle { color: var(--fg-faint); }
+
+/* 邮箱清单。一个账号一块，块与块之间用细线断开而不是留白——留白在这一页上
+   已经用来分「一组内的两件事」了，再用一次就分不出层级 */
+.settings-accounts {
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-accounts > li {
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--line);
+}
+
+.settings-account {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.settings-account-who { color: var(--fg); }
+
+.settings-account-where {
+  color: var(--fg-faint);
+  font-size: var(--text-aux);
+}
+
+.settings-account-state {
+  margin: var(--space-1) 0 var(--space-3);
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+/* 表单。标签在左、输入框在右，一行一件事 */
+.settings-form {
+  margin-top: var(--space-4);
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.settings-row > span {
+  color: var(--fg-dim);
+  font-size: var(--text-aux);
+}
+
+.settings-row input {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--field);
+  color: var(--fg);
+  font: inherit;
+}
+
+.settings-row input:focus {
+  outline: none;
+  border-color: var(--accent-line);
+  background: var(--field-focus);
+}
+
+.settings-form .settings-note { margin: var(--space-3) 0 var(--space-4); }

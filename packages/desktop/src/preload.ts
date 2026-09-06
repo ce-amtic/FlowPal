@@ -39,4 +39,6 @@ contextBridge.exposeInMainWorld('flowpal', {
   hideWindow: (): Promise<void> => ipcRenderer.invoke('flowpal:hide-window'),
   // 登录要一个真的浏览器窗口，只有主进程开得出来。设置页调它。
   signInToRuc: () => ipcRenderer.invoke('flowpal:sign-in-ruc'),
+  // 邮箱授权码在离开界面之前先加密：钥匙在系统钥匙串里，只有主进程够得着。
+  encryptSecret: (plain: string) => ipcRenderer.invoke('flowpal:encrypt-secret', plain),
 })

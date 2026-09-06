@@ -81,7 +81,7 @@ export const mockApi: Api = {
     sources: [
       { label: '课表与校历', created: 0, updated: 24, state: 'ok' as const, note: null },
       { label: '通知公告', created: 1, updated: 0, state: 'ok' as const, note: null },
-      { label: '邮件', created: 0, updated: 0, state: 'idle' as const, note: '未配置' },
+      { label: '邮件（2021xxxxxx@ruc.edu.cn）', created: 2, updated: 0, state: 'ok' as const, note: null },
     ],
     signedIn: true,
     signedInAt: SETTLED_LONG_AGO,
@@ -90,6 +90,25 @@ export const mockApi: Api = {
   syncNow: () => Promise.reject(new Error('样例模式下不写入数据。')),
 
   signOutOfRuc: () => Promise.reject(new Error('样例模式下不写入数据。')),
+
+  // 两个账号，一个正常一个锁着——这一页要在两种状态并存时也对得上版式。
+  listMailAccounts: () => delay({
+    accounts: [
+      {
+        id: 'mal_ruc', host: 'imap.ruc.edu.cn', port: 993,
+        username: '2021xxxxxx@ruc.edu.cn', perRun: 3, enabled: true, unlocked: true,
+      },
+      {
+        id: 'mal_gmail', host: 'imap.gmail.com', port: 993,
+        username: 'me@gmail.com', perRun: 2, enabled: true, unlocked: false,
+      },
+    ],
+  }),
+
+  addMailAccount: () => Promise.reject(new Error('样例模式下不写入数据。')),
+  patchMailAccount: () => Promise.reject(new Error('样例模式下不写入数据。')),
+  removeMailAccount: () => Promise.reject(new Error('样例模式下不写入数据。')),
+  testMailAccount: () => Promise.reject(new Error('样例模式下不写入数据。')),
 
   postFocusSession: () => Promise.reject(new Error('样例模式下不写入数据。')),
 

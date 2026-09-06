@@ -13,6 +13,10 @@ import { parseNotices, parseSchedule } from '../src/sync/portal.ts'
 import { mapPortalSchedule } from '../src/sync/map.ts'
 import { failed, idle, ok, summarize } from '../src/sync/state.ts'
 import { RucCookies } from '../src/sync/cookies.ts'
+import { MailSecrets } from '../src/sync/secrets.ts'
+import {
+  createMailAccount, deleteMailAccount, getMailAccount, listMailAccounts, setMailWatermark,
+} from '../src/store/mail-accounts.ts'
 
 /**
  * 同步这条路的硬断言。**不联网、不用凭据、不调模型**，所以它天天可跑。
@@ -324,6 +328,63 @@ try {
   silentlyEmpty = true
 }
 assert(silentlyEmpty, 'resultCode 非 0 时抛出，不当成「今天没有通知」')
+
+// ── 邮箱账号 ──────────────────────────────────────────────────────────
+
+console.log('\n邮箱')
+
+{
+  const db = openDb(':memory:')
+  const cipher = (s: string) => Buffer.from(s).toString('base64')
+
+  const ruc = createMailAccount(db, ctx, {
+    host: 'imap.ruc.edu.cn', port: 993, username: '2021xxxxxx@ruc.edu.cn',
+    passwordCipher: cipher('ruc-secret'), perRun: 3,
+  })
+  const gmail = createMailAccount(db, ctx, {
+    host: 'imap.gmail.com', port: 993, username: 'me@gmail.com',
+    passwordCipher: cipher('gmail-secret'), perRun: 2,
+  })
+  assert(listMailAccounts(db).length === 2, '可以有多个邮箱')
+
+  // 水位按账号存。共用一个的话，UID 大的那个邮箱会把小的那个整段跳过。
+  setMailWatermark(db, ctx, ruc.id, 900)
+  assert(
+    getMailAccount(db, ruc.id)!.watermark === 900 && getMailAccount(db, gmail.id)!.watermark === 0,
+    '进度水位一个邮箱一份，互不影响',
+  )
+
+  let dup = false
+  try {
+    createMailAccount(db, ctx, {
+      host: 'imap.ruc.edu.cn', port: 993, username: '2021XXXXXX@ruc.edu.cn',
+      passwordCipher: cipher('x'), perRun: 3,
+    })
+  } catch {
+    dup = true
+  }
+  assert(dup, '同一个邮箱加不了两遍——加重了会把每封信喂两次模型，只在账单上看得出来')
+
+  /*
+   * 这一条是这次改动的要害：**盘上只有密文，明文只在内存里**。
+   * server 解不开密文（钥匙在系统钥匙串里），所以没解锁时它必须说「需要解锁」，
+   * 而不是拿密文当密码去连 IMAP。
+   */
+  const secrets = new MailSecrets()
+  assert(!secrets.has(ruc.id), '冷启动时没有任何明文')
+  secrets.unlock(ruc.id, 'ruc-secret')
+  assert(
+    secrets.get(ruc.id) === 'ruc-secret' && secrets.get(gmail.id) === null,
+    '解锁一个不会顺带解开另一个',
+  )
+  secrets.forget(ruc.id)
+  assert(secrets.get(ruc.id) === null, '删掉账号时明文跟着丢')
+
+  deleteMailAccount(db, gmail.id)
+  assert(listMailAccounts(db).length === 1, '账号可以删掉')
+
+  db.close()
+}
 
 // ── 一轮的总状态 ──────────────────────────────────────────────────────
 

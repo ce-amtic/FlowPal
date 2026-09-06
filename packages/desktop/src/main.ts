@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, nativeTheme } f
 import { join } from 'node:path'
 import { createServer, loadConfig, ServerConfig } from '@flowpal/server'
 import { signInToRuc } from './ruc-login.ts'
+import { encryptSecret, unlockAll } from './mail-secrets.ts'
 
 /**
  * 这是全仓库唯一 import electron 的地方。
@@ -111,6 +112,18 @@ app.whenReady().then(() => {
   })
 
   /*
+   * 加密同样只能在这里：钥匙在系统钥匙串里，渲染进程和 server 都够不着。
+   * 界面拿回密文之后连同明文一起 POST 给 server——落库的是密文，明文只进内存。
+   */
+  ipcMain.handle('flowpal:encrypt-secret', (_e, plain: string) => {
+    try {
+      return { ok: true as const, cipher: encryptSecret(plain) }
+    } catch (e) {
+      return { ok: false as const, message: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  /*
    * 启动时拉一次，之后按配置的间隔（默认六小时）再拉。课表与考试变化很慢。
    *
    * **失败不重试，也不弹任何东西。** 下一个周期自然会再试；写重试循环只会把一个
@@ -128,7 +141,18 @@ app.whenReady().then(() => {
     if (res !== null && res.status !== 409) console.log(`同步：${await res.text()}`)
   }
 
-  void syncNow()
+  /*
+   * 先解锁再同步，顺序不能反：库里存的是密文，只有这一侧解得开。反过来的话，
+   * 开机那一次同步会把每个邮箱都跳过，状态行上写着「需要在桌面应用里解锁」，
+   * 而用户就在桌面应用里。
+   *
+   * 解锁失败也照样同步——门户那两路跟邮箱没关系，不该被它拖住。
+   */
+  unlockAll(server.url, config.token)
+    .then((n) => { if (n > 0) console.log(`已解锁 ${n} 个邮箱账号`) })
+    .catch((e: unknown) => console.error('解锁邮箱账号失败：', e))
+    .finally(() => void syncNow())
+
   const syncTimer = setInterval(() => void syncNow(), config.sync.intervalMinutes * 60_000)
 
   app.on('will-quit', () => {

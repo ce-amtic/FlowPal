@@ -12,9 +12,11 @@ import { RucHttp, SessionExpired } from './http.ts'
 import { fetchNoticeBody, fetchNotices, fetchSchedule, parseSchedule, probePortal } from './portal.ts'
 import { mapPortalSchedule } from './map.ts'
 import { fetchMail, describeMailbox } from './mail.ts'
+import { listMailAccounts, setMailWatermark } from '../store/mail-accounts.ts'
+import type { MailSecrets } from './secrets.ts'
 import {
-  failed, idle, lastScheduleFragment, mailWatermark, noticeWatermark, ok,
-  rememberScheduleFragment, setMailWatermark, setNoticeWatermark, summarize,
+  failed, idle, lastScheduleFragment, noticeWatermark, ok,
+  rememberScheduleFragment, setNoticeWatermark, summarize,
   writeSyncStatus, type SyncSourceResult,
 } from './state.ts'
 
@@ -44,6 +46,8 @@ export type SyncDeps = {
   ctx: Ctx
   config: ServerConfig
   cookies: RucCookies
+  /** 邮箱授权码的明文。只在内存里，由桌面端解密后推进来 */
+  secrets: MailSecrets
   /** 每写一批就广播一次「变了」，让两个窗口跟着刷新 */
   onChanged: () => void
 }
@@ -55,40 +59,23 @@ export type SyncResult = {
 }
 
 export async function runSync(deps: SyncDeps): Promise<SyncResult> {
-  const { db, ctx, cookies } = deps
+  const { db, ctx } = deps
 
-  if (cookies.isEmpty) {
-    const sources = [idle(PORTAL, '还没有登录')]
-    writeSyncStatus(db, ctx, 'expired', '还没有登录人大门户', sources)
-    return { state: 'expired', message: '还没有登录人大门户', sources }
-  }
-
-  const http = new RucHttp(cookies)
-  const sources: SyncSourceResult[] = []
-
-  try {
-    // 先探一次会话。探针只回登录信息、不含要解析的业务数据，所以「登录态没了」
-    // 这件事在这里就说清楚，不会伪装成某个接口的解析失败。
-    await probePortal(http)
-    cookies.save()
-
-    sources.push(await syncSchedule(deps, http))
-    deps.onChanged()
-    sources.push(await syncNotices(deps, http))
-    deps.onChanged()
-  } catch (e) {
-    // 门户这一路整个停了，但邮件跟它没关系，照跑——一处坏了不该把另一处也关掉。
-    const expired = e instanceof SessionExpired
-    const message = expired ? '需要重新登录人大门户' : e instanceof Error ? e.message : String(e)
-    sources.push(failed(PORTAL, message))
-    const withMail = [...sources, await syncMail(deps)]
-    writeSyncStatus(db, ctx, expired ? 'expired' : 'error', message, withMail)
-    deps.onChanged()
-    return { state: expired ? 'expired' : 'error', message, sources: withMail }
-  }
-
-  sources.push(await syncMail(deps))
+  /*
+   * 门户与邮箱是两条**互不相干**的来源，所以谁也不能提前 return 把另一条带走。
+   * 没登录门户不该让邮箱一封不读，邮箱认证失败也不该让课表停下。
+   */
+  const portal = await syncPortal(deps)
   deps.onChanged()
+  const sources = [...portal.sources, ...await syncMail(deps)]
+  deps.onChanged()
+
+  // 登录过期是唯一一种「要用户去做点什么」的失败，所以它盖过总的成败：
+  // 一句「新增 0 条」不会让任何人想起来去重新登录。
+  if (portal.expired !== null) {
+    writeSyncStatus(db, ctx, 'expired', portal.expired, sources)
+    return { state: 'expired', message: portal.expired, sources }
+  }
 
   const { state, message } = summarize(sources)
   writeSyncStatus(db, ctx, state, message, sources)
@@ -96,6 +83,38 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
 }
 
 const PORTAL = '人大门户'
+
+/**
+ * 门户那两路：日程中心与通知公告。它们共用一个登录态，所以一起成败。
+ *
+ * `expired` 非 null 时是要显示给用户的那句话——登录过期是唯一一种「要用户去做点
+ * 什么」的失败，所以它必须从这里一路传上去，不能混进 sources 里等人自己去翻。
+ */
+async function syncPortal(
+  deps: SyncDeps,
+): Promise<{ sources: SyncSourceResult[]; expired: string | null }> {
+  if (deps.cookies.isEmpty) {
+    return { sources: [idle(PORTAL, '还没有登录')], expired: '还没有登录人大门户' }
+  }
+
+  const http = new RucHttp(deps.cookies)
+  const sources: SyncSourceResult[] = []
+  try {
+    // 先探一次会话。探针只回登录信息、不含要解析的业务数据，所以「登录态没了」
+    // 这件事在这里就说清楚，不会伪装成某个接口的解析失败。
+    await probePortal(http)
+    deps.cookies.save()
+
+    sources.push(await syncSchedule(deps, http))
+    deps.onChanged()
+    sources.push(await syncNotices(deps, http))
+    return { sources, expired: null }
+  } catch (e) {
+    const expired = e instanceof SessionExpired
+    const message = expired ? '需要重新登录人大门户' : e instanceof Error ? e.message : String(e)
+    return { sources: [...sources, failed(PORTAL, message)], expired: expired ? message : null }
+  }
+}
 
 // ── 日程中心：课表、校历、我的日历 ────────────────────────────────────
 
@@ -199,24 +218,39 @@ async function syncNotices(deps: SyncDeps, http: RucHttp): Promise<SyncSourceRes
 
 // ── 邮件 ──────────────────────────────────────────────────────────────
 
-async function syncMail(deps: SyncDeps): Promise<SyncSourceResult> {
-  const { config } = deps
-  if (config.mail === null) return idle(describeMailbox(null), '未配置')
+/**
+ * 每个邮箱各算一路。
+ *
+ * 一个账号连不上不该把别的账号也关掉：学校邮箱的授权码过期了，私人邮箱照读。
+ * 所以错误在每个账号自己那一层被接住，设置页上一个账号一行。
+ */
+async function syncMail(deps: SyncDeps): Promise<SyncSourceResult[]> {
+  const accounts = listMailAccounts(deps.db).filter((a) => a.enabled)
+  if (accounts.length === 0) return [idle('邮件', '还没有添加邮箱')]
 
-  const label = describeMailbox(config.mail)
-  try {
-    const messages = await fetchMail(config.mail, mailWatermark(deps.db))
-    let created = 0
-    for (const message of messages) {
-      created += await runThroughLoop(deps, 'email', message.text)
-      setMailWatermark(deps.db, deps.ctx, message.uid)
+  const results: SyncSourceResult[] = []
+  for (const account of accounts) {
+    const label = describeMailbox(account)
+    const password = deps.secrets.get(account.id)
+    if (password === null) {
+      // 密文在库里，钥匙在系统钥匙串里，而这个进程解不开。说清楚是「没解锁」而
+      // 不是「读不到邮件」——前者点一下就好，后者会让人去查授权码。
+      results.push(idle(label, '需要在桌面应用里解锁'))
+      continue
     }
-    return ok(label, created, 0)
-  } catch (e) {
-    // 这一层拥有邮箱这条路的错误。连不上、授权码不对、邮箱协议变了——三种都要
-    // 原样报到设置页上，因为它们的下一步各不相同，而门户那一路照跑不受影响。
-    return failed(label, e instanceof Error ? e.message : String(e))
+    try {
+      let created = 0
+      for (const message of await fetchMail(account, password)) {
+        created += await runThroughLoop(deps, 'email', message.text)
+        setMailWatermark(deps.db, deps.ctx, account.id, message.uid)
+      }
+      results.push(ok(label, created, 0))
+    } catch (e) {
+      // 连不上、授权码不对、协议变了——三种都要原样报上去，它们的下一步各不相同。
+      results.push(failed(label, e instanceof Error ? e.message : String(e)))
+    }
   }
+  return results
 }
 
 // ── 散文来源共用的那一段 ──────────────────────────────────────────────
