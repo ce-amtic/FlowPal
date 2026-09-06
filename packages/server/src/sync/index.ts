@@ -225,8 +225,13 @@ async function syncNotices(deps: SyncDeps, http: RucHttp): Promise<SyncSourceRes
  * 所以错误在每个账号自己那一层被接住，设置页上一个账号一行。
  */
 async function syncMail(deps: SyncDeps): Promise<SyncSourceResult[]> {
-  const accounts = listMailAccounts(deps.db).filter((a) => a.enabled)
-  if (accounts.length === 0) return [idle('邮件', '还没有添加邮箱')]
+  const all = listMailAccounts(deps.db)
+  const accounts = all.filter((a) => a.enabled)
+  if (accounts.length === 0) {
+    // 「一个都没加」与「加了但都停用了」不是一句话：前者要去加一个，后者是用户
+    // 自己关掉的，不需要他做任何事。
+    return [idle('邮件', all.length === 0 ? '还没有添加邮箱' : '邮箱都停用了')]
+  }
 
   const results: SyncSourceResult[] = []
   for (const account of accounts) {

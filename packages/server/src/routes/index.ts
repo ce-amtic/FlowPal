@@ -567,7 +567,9 @@ export function createRoutes(db: DatabaseSync, config: ServerConfig, calendar: C
     if (getMailAccount(db, id) === null) return c.json({ error: '邮箱账号不存在' }, 404)
 
     // 改密码时两样一起给；只改端口之类时两样都不给。给一半是错的，说清楚。
-    const body = MailAccountBody.partial().safeParse(await c.req.json())
+    // `enabled` 只在这里出现，不在新建那份里：新加的账号一定是启用的。
+    const body = MailAccountBody.partial().extend({ enabled: z.boolean().optional() })
+      .safeParse(await c.req.json())
     if (!body.success) return c.json({ error: '邮箱参数不对', issues: body.error.issues }, 400)
     const { password, ...patch } = body.data
     if ((password === undefined) !== (patch.passwordCipher === undefined)) {
