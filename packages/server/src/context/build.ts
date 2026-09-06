@@ -34,8 +34,8 @@ export function buildContext(db: DatabaseSync, ctx: Ctx): ContextSnapshot {
 }
 
 /**
- * 锚点。作息、先验曲线、当日课密度全都是相对「现在」才有意义的事实：
- * 不给这一节，起床时刻和 90 分钟节律在模型眼里就是两句没有位置的话。
+ * 锚点。作息与当日课密度都是相对「现在」才有意义的事实：不给这一节，
+ * 起床时刻在模型眼里就是一句没有位置的话，prompt 里的曲线规律也无从套用。
  */
 function momentSection(db: DatabaseSync, ctx: Ctx): ContextSection {
   const facts: string[] = []
@@ -178,18 +178,29 @@ function priorSection(db: DatabaseSync, ctx: Ctx): ContextSection {
     const since = (label: string, h: number | null) => {
       if (h === null) return
       if (nowH < h) facts.push(`按${label}的起床时间算，现在还早于通常起床时刻（推算）`)
+      else if (nowH - h < 1) facts.push(`按${label}的起床时间算，此刻距起床不到一小时（推算）`)
       else facts.push(`按${label}的起床时间算，此刻距起床约 ${hoursLabel(nowH - h)}（推算）`)
     }
     if (workH !== null && restH !== null && workH === restH) since('平时', workH)
     else { since('有课日', workH); since('没课日', restH) }
+    const type = chronotypeOf(rest, restH)
+    if (type !== null) facts.push(`作息类型：${type}（按没课日的起床时刻推算）`)
   } else {
-    facts.push(`作息时间未知：用户没有填起床时间（先验，猜的）`)
+    facts.push(`作息时间未知：用户没有填起床时间`)
   }
-  facts.push('人群规律（先验，不是这个人的数据）：起床后约两到四小时是一天里第一个清醒高峰')
-  facts.push('人群规律（先验）：13 点到 15 点前后多数人有一段低谷，午饭后尤其明显')
-  facts.push('人群规律（先验）：通常入睡前两到三小时开始下滑，晚起的人整条曲线相应后移')
-  facts.push('人群规律（先验）：持续专注约每 90 分钟起伏一次，一段专注后需要短暂间歇')
-  return { source: 'prior', label: '先验', facts }
+  return { source: 'prior', label: '作息', facts }
+}
+
+/**
+ * MCTQ 的结论是从没课日算的：那天没有闹钟，起床时刻才反映自己的钟。
+ * 阈值按选项的档位划：8 点前偏早，9 到 10 点居中，11 点起偏晚。
+ * 「更晚」没有数字，但它的意思是明确的。
+ */
+function chronotypeOf(label: string, hour: number | null): string | null {
+  if (hour === null) return label === '更晚' ? '偏晚' : null
+  if (hour <= 8) return '偏早'
+  if (hour <= 10) return '居中'
+  return '偏晚'
 }
 
 /** 「7:30」「07:30」「6:30 前」→ 小时数；「更晚」这种没有数字的选项 → null。 */
