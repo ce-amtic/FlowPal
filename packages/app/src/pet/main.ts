@@ -64,16 +64,19 @@ function hideTapHint(): void {
 }
 
 function forwardInput(input: {
-  type: 'clipboard' | 'focus-composer' | 'files'
+  type: 'clipboard' | 'focus-composer' | 'files' | 'text'
   source?: 'pet' | 'hotkey' | 'drop'
   paths?: string[]
+  text?: string
 }): void {
   const bridge = window.flowpal
   const payload = input.type === 'files'
     ? { type: 'files' as const, paths: input.paths ?? [], source: 'drop' as const }
-    : input.type === 'clipboard'
-      ? { type: 'clipboard' as const, source: (input.source === 'hotkey' ? 'hotkey' : 'pet') as 'pet' | 'hotkey' }
-      : { type: 'focus-composer' as const }
+    : input.type === 'text'
+      ? { type: 'text' as const, text: input.text ?? '', source: 'drop' as const }
+      : input.type === 'clipboard'
+        ? { type: 'clipboard' as const, source: (input.source === 'hotkey' ? 'hotkey' : 'pet') as 'pet' | 'hotkey' }
+        : { type: 'focus-composer' as const }
   if (bridge?.input?.forwardInput) {
     void bridge.input.forwardInput(payload)
   } else if (input.type === 'files' && bridge?.input?.forwardFiles) {
@@ -235,14 +238,18 @@ const removePetCommand = window.flowpal?.pet?.onCommand((command) => {
   }
 })
 
-// File drops land in the resident renderer's DOM, not the hidden main window.
+// Drops land in the resident renderer's DOM, not the hidden main window.
 // Forward them over the optional preload bridge; older shells still open the
 // main window, where the user can use the Composer as a fallback.
-const listenFiles = window.flowpal?.input?.onFilesDropped ?? window.flowpal?.onFilesDropped
-const removeFiles = listenFiles?.((paths) => {
-  if (paths.length === 0) return
+//
+// 拖过来的常常不是文件，而是从微信、网页里选中的一段通知。那种手势的
+// `dataTransfer` 里没有文件，只有 text/plain——早先只读文件，于是那一拖静默消失。
+const listenDrops = window.flowpal?.input?.onContentDropped ?? window.flowpal?.onContentDropped
+const removeFiles = listenDrops?.(({ paths, text }) => {
   externalFileDropActive = true
-  forwardInput({ type: 'files', paths, source: 'drop' })
+  if (paths.length > 0) forwardInput({ type: 'files', paths, source: 'drop' })
+  else if (text) forwardInput({ type: 'text', text, source: 'drop' })
+  else return
   if (!window.flowpal?.input?.forwardInput && !window.flowpal?.input?.forwardFiles) {
     void window.flowpal?.pet?.openMain?.('/now?capture=focus')
   }

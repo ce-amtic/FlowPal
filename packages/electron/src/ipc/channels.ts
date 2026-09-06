@@ -95,6 +95,7 @@ export type DesktopInput =
   | { type: 'focus-composer' }
   | { type: 'clipboard'; source: 'pet' | 'hotkey' }
   | { type: 'files'; paths: string[]; source: 'drop' }
+  | { type: 'text'; text: string; source: 'drop' }
 
 /**
  * Input that may cross from the resident pet renderer.  A pet is never
@@ -104,10 +105,13 @@ export type PetForwardInput =
   | { type: 'focus-composer' }
   | { type: 'clipboard'; source: 'pet' }
   | { type: 'files'; paths: string[]; source: 'drop' }
+  | { type: 'text'; text: string; source: 'drop' }
 
 export const DESKTOP_INPUT_LIMITS = {
   maxFiles: 32,
   maxPathLength: 4096,
+  /** 一次拖进来的文字上限。超过这个长度的多半是整页正文，不是一条通知。 */
+  maxTextLength: 20000,
 } as const
 
 export type DragResult =
@@ -237,11 +241,23 @@ function isFilesInput(value: Record<string, unknown>): value is {
   return value.paths.every(isSafeDroppedPath)
 }
 
+function isTextInput(value: Record<string, unknown>): value is {
+  type: 'text'
+  text: string
+  source: 'drop'
+} {
+  if (value.type !== 'text' || value.source !== 'drop') return false
+  if (typeof value.text !== 'string') return false
+  const text = value.text.trim()
+  return text.length > 0 && text.length <= DESKTOP_INPUT_LIMITS.maxTextLength
+}
+
 export function isDesktopInput(value: unknown): value is DesktopInput {
   if (!value || typeof value !== 'object') return false
   const input = value as Record<string, unknown>
   if (input.type === 'focus-composer') return true
   if (input.type === 'clipboard') return input.source === 'pet' || input.source === 'hotkey'
+  if (input.type === 'text') return isTextInput(input)
   return isFilesInput(input)
 }
 

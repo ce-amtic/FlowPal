@@ -55,6 +55,32 @@ export function DesktopInputController() {
     }
   }, [navigate, queryClient, setStatus])
 
+  /**
+   * 拖过来的一段文字。
+   *
+   * 跟剪贴板走同一条路：投放 → 等这次运行跑完 → 把回执说出来。来源记成
+   * `drop`，因为它确实是一次拖放，不是一次粘贴——碎片上的来源要对得上用户做的
+   * 那个动作。
+   */
+  const captureText = useCallback(async (text: string) => {
+    navigate('/now')
+    setStatus('processing', { message: '正在提取日程…' })
+    try {
+      const result = await api.throwIn({ source: 'drop', rawType: 'text', rawText: text })
+      const outcome = await api.awaitRun(result.run.id)
+      const message = outcome.message || '已记下。原文已存。'
+      const failed = outcome.status !== 'done'
+      setStatus(failed ? 'error' : 'done', { message })
+      dispatchDesktopInput({ type: 'receipt', message, error: failed })
+      await queryClient.invalidateQueries()
+      resetStatusSoon(setStatus, failed ? 'error' : 'done')
+    } catch (cause) {
+      const message = toMessage(cause)
+      setStatus('error', { message })
+      dispatchDesktopInput({ type: 'receipt', message, error: true })
+    }
+  }, [navigate, queryClient, setStatus])
+
   const captureFiles = useCallback(async (paths: string[]) => {
     if (paths.length === 0) return
     navigate('/now')
@@ -97,8 +123,9 @@ export function DesktopInputController() {
       navigate('/now', { state: { focusComposer: false } })
       enqueue(() => captureClipboard('hotkey'))
     })
-    const removeDrop = bridge.onFilesDropped((paths) => {
-      dispatchDesktopInput({ type: 'files', paths, source: 'drop' })
+    const removeDrop = bridge.onContentDropped(({ paths, text }) => {
+      if (paths.length > 0) dispatchDesktopInput({ type: 'files', paths, source: 'drop' })
+      else if (text) dispatchDesktopInput({ type: 'text', text, source: 'drop' })
     })
     const onDesktopInput = bridge.onDesktopInput ?? bridge.input?.onDesktopInput
     const removeForwarded = onDesktopInput?.((input) => {
@@ -124,8 +151,12 @@ export function DesktopInputController() {
     }
     if (input.type === 'files') {
       enqueue(() => captureFiles(input.paths))
+      return
     }
-  }), [captureClipboard, captureFiles, enqueue, navigate])
+    if (input.type === 'text') {
+      enqueue(() => captureText(input.text))
+    }
+  }), [captureClipboard, captureFiles, captureText, enqueue, navigate])
 
   return null
 }

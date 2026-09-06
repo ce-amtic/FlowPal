@@ -235,7 +235,9 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
       ? { type: 'clipboard', source: 'pet' }
       : payload.type === 'files'
         ? { type: 'files', source: 'drop', paths: [...payload.paths] }
-        : { type: 'focus-composer' }
+        : payload.type === 'text'
+          ? { type: 'text', source: 'drop', text: payload.text }
+          : { type: 'focus-composer' }
     // The main process owns delivery. It queues while the renderer is loading,
     // so a drop during focus/restore/reload cannot disappear between windows.
     state.forwardDesktopInput(input)

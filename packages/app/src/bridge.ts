@@ -10,6 +10,10 @@ export type DesktopInputBridgeEvent =
   | { type: 'focus-composer' }
   | { type: 'clipboard'; source: 'pet' | 'hotkey' }
   | { type: 'files'; paths: string[]; source: 'drop' }
+  | { type: 'text'; text: string; source: 'drop' }
+
+/** 一次拖放交出来的东西：有文件就是文件，没有文件才看文字。 */
+export type DroppedContent = { paths: string[]; text: string }
 
 export type PetPresentationBridgeEvent = {
   mode: 'inline' | 'floating'
@@ -22,7 +26,7 @@ export type SignInResult = { ok: true; saved: number } | { ok: false; message: s
 export type FlowpalBridge = {
   platform: string
   onHotkeyOpen: (cb: () => void) => Unsubscribe
-  onFilesDropped: (cb: (paths: string[]) => void) => Unsubscribe
+  onContentDropped: (cb: (content: DroppedContent) => void) => Unsubscribe
   onDesktopInput?: (cb: (input: DesktopInputBridgeEvent) => void) => Unsubscribe
   /** Native main-window focus drives the inline/floating pet hand-off. */
   onMainWindowFocusChanged?: (cb: (change: {
@@ -66,7 +70,7 @@ export type FlowpalBridge = {
   /** Optional cross-window forwarding used when a file is dropped on pet.html. */
   input?: {
     onHotkey?: (cb: () => void) => Unsubscribe
-    onFilesDropped?: (cb: (paths: string[]) => void) => Unsubscribe
+    onContentDropped?: (cb: (content: DroppedContent) => void) => Unsubscribe
     readClipboard?: () => Promise<string>
     readClipboardImage?: () => Promise<string | null>
     forwardFiles?: (paths: string[]) => Promise<void>
@@ -98,7 +102,7 @@ declare global {
 const browserMock: FlowpalBridge = {
   platform: 'browser',
   onHotkeyOpen: () => () => {},
-  onFilesDropped: () => () => {},
+  onContentDropped: () => () => {},
   onMainWindowFocusChanged: () => () => {},
   onFocusSessionChanged: () => () => {},
   readClipboard: () => navigator.clipboard.readText(),

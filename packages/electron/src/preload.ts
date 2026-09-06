@@ -37,7 +37,23 @@ function listenMainWindowFocusChanged(
   })
 }
 
-function listenDroppedFiles(callback: (paths: string[]) => void): Unsubscribe {
+/**
+ * 一次拖放里能拿到的东西。
+ *
+ * **文件和文字必须由同一个回调交出去。** 从访达拖一个文件进来时，`dataTransfer`
+ * 里除了文件往往还带一份纯文本（文件名或路径）；两条独立的订阅会让一次拖放变成
+ * 两次投放——一次文件，一次把路径当成通知全文的乱码。
+ */
+type DroppedContent = { paths: string[]; text: string }
+
+function droppedText(transfer: DataTransfer | null): string {
+  if (!transfer) return ''
+  // 拖网页里的一段选区给的是 text/plain；拖链接或图片给的是 text/uri-list。
+  const text = transfer.getData('text/plain') || transfer.getData('text/uri-list')
+  return text.trim()
+}
+
+function listenDroppedContent(callback: (content: DroppedContent) => void): Unsubscribe {
   const onDrop = (event: DragEvent): void => {
     event.preventDefault()
     event.stopPropagation()
@@ -54,7 +70,8 @@ function listenDroppedFiles(callback: (paths: string[]) => void): Unsubscribe {
         // caller still receives the other files; no privileged error leaks.
       }
     }
-    if (paths.length > 0) callback(paths)
+    const text = paths.length > 0 ? '' : droppedText(event.dataTransfer)
+    if (paths.length > 0 || text.length > 0) callback({ paths, text })
   }
   const onDragOver = (event: DragEvent): void => {
     event.preventDefault()
@@ -94,7 +111,7 @@ function forwardInput(input: PetForwardInput): Promise<void> {
 
 const input = {
   onHotkey: listenHotkey,
-  onFilesDropped: listenDroppedFiles,
+  onContentDropped: listenDroppedContent,
   readClipboard: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.readClipboard),
   readClipboardImage: (): Promise<string | null> => ipcRenderer.invoke(IPC_CHANNELS.readClipboardImage),
   onDesktopInput: listenDesktopInput,
@@ -145,7 +162,7 @@ const pet = {
 const bridge: FlowPalDesktopBridge = {
   platform: process.platform,
   onHotkeyOpen: input.onHotkey,
-  onFilesDropped: input.onFilesDropped,
+  onContentDropped: input.onContentDropped,
   onDesktopInput: input.onDesktopInput,
   onFocusSessionChanged: (callback) => subscribe<unknown>(IPC_CHANNELS.focusSessionChanged, (payload) => {
     if (isFocusSessionChange(payload)) callback(payload)

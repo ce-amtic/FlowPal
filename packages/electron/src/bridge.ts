@@ -16,6 +16,9 @@ import type {
 
 export type Unsubscribe = () => void
 
+/** 一次拖放交出来的东西：有文件就是文件，没有文件才看文字。 */
+export type DroppedContent = { paths: string[]; text: string }
+
 /**
  * Public preload contract.  This type intentionally contains both the flat
  * methods used by the first app shell and the grouped methods from the B-line
@@ -25,7 +28,7 @@ export type Unsubscribe = () => void
 export interface FlowPalDesktopBridge {
   platform: NodeJS.Platform
   onHotkeyOpen(callback: () => void): Unsubscribe
-  onFilesDropped(callback: (paths: string[]) => void): Unsubscribe
+  onContentDropped(callback: (content: DroppedContent) => void): Unsubscribe
   onDesktopInput(callback: (input: DesktopInput) => void): Unsubscribe
   onFocusSessionChanged(callback: (change: FocusSessionChange) => void): Unsubscribe
   onMainWindowFocusChanged(callback: (change: MainWindowFocusChange) => void): Unsubscribe
@@ -52,7 +55,7 @@ export interface FlowPalDesktopBridge {
   }
   input: {
     onHotkey(callback: () => void): Unsubscribe
-    onFilesDropped(callback: (paths: string[]) => void): Unsubscribe
+    onContentDropped(callback: (content: DroppedContent) => void): Unsubscribe
     readClipboard(): Promise<string>
     readClipboardImage(): Promise<string | null>
     onDesktopInput(callback: (input: DesktopInput) => void): Unsubscribe

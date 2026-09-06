@@ -53,7 +53,7 @@ export function App() {
    */
   useEffect(() => {
     bridge.onHotkeyOpen(() => navigate('/now', { state: { focusComposer: true } }))
-    bridge.onFilesDropped((paths) => {
+    bridge.onContentDropped(({ paths }) => {
       // 只收图片。别的类型只有路径没有内容，交给模型等于给它一个空信封
       const images = paths.filter((p) => /\.(png|jpe?g|webp|gif)$/i.test(p))
       if (images.length > 0) navigate('/now', { state: { droppedPaths: images } })
