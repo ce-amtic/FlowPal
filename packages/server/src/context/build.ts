@@ -171,24 +171,25 @@ function priorSection(db: DatabaseSync, ctx: Ctx): ContextSection {
   const work = getSetting(db, 'chronotype_workday_wake')
   const rest = getSetting(db, 'chronotype_restday_wake')
   if (work && rest) {
-    facts.push(`有课的日子通常 ${work} 起，没课的日子通常 ${rest} 起（用户填的）`)
+    // 不把两个原始起床时刻原样给出去：模型会把「没课日」这种我们的分类词直接说给用户。
+    // 它需要的三样都在下面：差值、今天距起床多久、作息类型。
     const workH = wakeHour(work)
     const restH = wakeHour(rest)
     const nowH = Number(ctx.now.slice(11, 13)) + Number(ctx.now.slice(14, 16)) / 60
     if (workH !== null && restH !== null && restH - workH >= 1) {
-      facts.push(`没课的日子比有课的日子晚起约 ${hoursLabel(restH - workH)}，说明有课的日子多半靠闹钟起（推算）`)
+      facts.push(`没课的日子比有课的日子晚起约 ${hoursLabel(restH - workH)}，有课的日子多半靠闹钟起`)
     }
     // 今天适用哪一个起床时刻，在这里定，不留给模型：给它两个数它就两个都报。
     // 有课与否看今天有没有按课表展开出来的重复项。
     const hasClass = timedEventsToday(db, ctx).some((e) => e.rrule !== null)
     const todayH = hasClass ? workH : restH
     if (todayH !== null) {
-      if (nowH < todayH) facts.push('现在还早于他通常的起床时刻（推算）')
-      else if (nowH - todayH < 1) facts.push('此刻距起床不到一小时（推算）')
-      else facts.push(`此刻距起床约 ${hoursLabel(nowH - todayH)}（推算）`)
+      if (nowH < todayH) facts.push('现在还早于他通常的起床时刻')
+      else if (nowH - todayH < 1) facts.push('起床不到一小时')
+      else facts.push(`起床约 ${hoursLabel(nowH - todayH)}`)
     }
     const type = chronotypeOf(rest, restH)
-    if (type !== null) facts.push(`作息类型：${type}（按没课日的起床时刻推算）`)
+    if (type !== null) facts.push(`作息${type}`)
   } else {
     facts.push(`作息时间未知：用户没有填起床时间`)
   }
