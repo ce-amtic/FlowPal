@@ -48,8 +48,8 @@ export function Markup({ text }: { text: string }) {
   })
 
   const ctx: Ctx = {
-    items: new Map((data?.items ?? []).map((i) => [i.id, i])),
-    projects: new Map((projectData?.projects ?? []).map((c) => [c.project.id, c])),
+    items: lookup(data?.items ?? [], (i) => i.id),
+    projects: lookup(projectData?.projects ?? [], (c) => c.project.id),
     navigate,
     decide,
     byDay: false,
@@ -60,12 +60,35 @@ export function Markup({ text }: { text: string }) {
 
 /** 渲染一路带下去的东西。库里查出来的事实，以及几处由上下文决定的开关 */
 type Ctx = {
-  items: Map<string, ItemWithSources>
-  projects: Map<string, ProjectCard>
+  items: (id: string) => ItemWithSources | undefined
+  projects: (id: string) => ProjectCard | undefined
   navigate: NavigateFunction
   decide: Decide
   /** 在 `:::days` 里：条目按天排开、长出日期头。同一段 `::item`，容器变了它就变 */
   byDay: boolean
+}
+
+/** 前缀至少这么长才认。「itm_」加四位十六进制，在一个人的库里撞不上 */
+const MIN_PREFIX = 8
+
+/**
+ * 按 id 取一行。先精确匹配，匹配不上再按前缀。
+ *
+ * 提示词要求原样照抄 id，但模型列到第七条时会开始抄短（`itm_92a41`）。那一条查不到
+ * 就整个不画，一次列七条的回答于是只剩标题和一片空白——最难看、也最像坏了的一种收场。
+ *
+ * 前缀唯一才认，撞上两条就当没有：认错一条比不认更误导。这跟短 SHA 是同一回事，
+ * 不是猜。
+ */
+function lookup<T>(rows: T[], idOf: (row: T) => string): (id: string) => T | undefined {
+  const exact = new Map(rows.map((r) => [idOf(r), r]))
+  return (id) => {
+    const hit = exact.get(id)
+    if (hit) return hit
+    if (id.length < MIN_PREFIX) return undefined
+    const matches = rows.filter((r) => idOf(r).startsWith(id))
+    return matches.length === 1 ? matches[0] : undefined
+  }
 }
 
 type Decide = UseMutationResult<
@@ -134,14 +157,14 @@ function renderRef(tag: MarkupTag, subject: string, ctx: Ctx, key: number): Reac
   const kind = markupSpec(tag).subject
 
   if (kind === 'item') {
-    const item = ctx.items.get(subject)
+    const item = ctx.items(subject)
     // 查不到就整段不提它。这里最不能出的是屏幕上留一个光秃秃的 id
     if (!item) return null
     return <Link className="markup-ref" to={`/items/${item.id}`} key={key}>{item.title}</Link>
   }
 
   if (kind === 'project') {
-    const card = ctx.projects.get(subject)
+    const card = ctx.projects(subject)
     if (!card) return null
     return (
       <Link className="markup-ref" to={`/projects/${card.project.id}`} key={key}>
@@ -178,7 +201,7 @@ function renderItems(els: MarkupElement[], ctx: Ctx): React.ReactNode {
 function renderLooseQuotes(els: MarkupElement[], ctx: Ctx): React.ReactNode {
   const rows: Row[] = []
   for (const el of els) {
-    const item = el.subject ? ctx.items.get(el.subject) : undefined
+    const item = el.subject ? ctx.items(el.subject) : undefined
     if (item) rows.push({ el, item, quotes: [el] })
   }
   if (rows.length === 0) return null
@@ -378,7 +401,7 @@ function resolveProjects(
 ): { el: MarkupElement; card: ProjectCard }[] {
   const cards: { el: MarkupElement; card: ProjectCard }[] = []
   for (const el of els) {
-    const card = el.subject ? ctx.projects.get(el.subject) : undefined
+    const card = el.subject ? ctx.projects(el.subject) : undefined
     if (card) cards.push({ el, card })
   }
   return cards
@@ -388,7 +411,7 @@ function resolveProjects(
 function resolveItems(els: MarkupElement[], ctx: Ctx): Row[] {
   const rows: Row[] = []
   for (const el of els) {
-    const item = el.subject ? ctx.items.get(el.subject) : undefined
+    const item = el.subject ? ctx.items(el.subject) : undefined
     if (item) rows.push({ el, item, quotes: el.quotes })
   }
   return rows
