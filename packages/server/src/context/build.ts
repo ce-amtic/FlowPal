@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { Ctx } from '@flowpal/shared'
+import { occursOn, supportsRrule, type Ctx } from '@flowpal/shared'
 import { listFocusSessions } from '../store/focus.ts'
 import { listItems } from '../store/items.ts'
 import { projectCards } from '../store/projects.ts'
@@ -24,12 +24,47 @@ export type ContextSnapshot = {
 
 export function buildContext(db: DatabaseSync, ctx: Ctx): ContextSnapshot {
   const sections: ContextSection[] = [
+    momentSection(db, ctx),
     computedSection(db, ctx),
     observedSection(db, ctx),
     statedSection(db),
-    priorSection(db),
+    priorSection(db, ctx),
   ]
   return { sections, formatted: formatSections(sections) }
+}
+
+/**
+ * 锚点。作息、先验曲线、当日课密度全都是相对「现在」才有意义的事实：
+ * 不给这一节，起床时刻和 90 分钟节律在模型眼里就是两句没有位置的话。
+ */
+function momentSection(db: DatabaseSync, ctx: Ctx): ContextSection {
+  const facts: string[] = []
+  const today = ctx.now.slice(0, 10)
+  const clock = ctx.now.slice(11, 16)
+  facts.push(`现在是 ${today}（${weekdayLabel(today)}）${clock}`)
+
+  // 当日课表：重复项按 rrule 展开到今天，非重复的事件按日期落在今天。
+  // 与日程页同一套展开规则；放不下的 rrule 退回按 startsAt 那一天。
+  // 全天的日子（「学期开始」）不占时段，不算进课密度。
+  const events = listItems(db).filter((i) =>
+    i.type === 'event' && i.status === 'active' && i.startsAt !== null && i.datePrecision !== 'day')
+  const todays = events
+    .filter((i) => {
+      if (i.rrule !== null && supportsRrule(i.rrule)) return occursOn(i.rrule, i.startsAt!, today)
+      return i.startsAt!.slice(0, 10) === today
+    })
+    .sort((a, b) => a.startsAt!.slice(11, 16).localeCompare(b.startsAt!.slice(11, 16)))
+  if (todays.length === 0) {
+    facts.push('今天没有课，也没有定时的事件')
+  } else {
+    facts.push(`今天有 ${todays.length} 项定时安排（课或事件）：`)
+    for (const e of todays) {
+      const at = e.startsAt!.slice(11, 16)
+      const range = e.dateRaw !== null && /–/.test(e.dateRaw) ? e.dateRaw.replace(/ · 第.*$/, '') : at
+      facts.push(`${range} 「${e.title}」${at <= clock ? '（已开始或已结束）' : ''}`)
+    }
+  }
+  return { source: 'computed', label: '此刻', facts }
 }
 
 function computedSection(db: DatabaseSync, ctx: Ctx): ContextSection {
@@ -123,17 +158,56 @@ function statedSection(db: DatabaseSync): ContextSection {
   return { source: 'stated', label: '用户说的', facts }
 }
 
-function priorSection(db: DatabaseSync): ContextSection {
+/**
+ * 作息两问（MCTQ 短式）与文献里的曲线形状。数值推算在这里做完：这次调用关着思考，
+ * 「距起床几小时」这种减法不该留给模型。哪一个起床时刻适用于今天不在这里判——
+ * 今天是周几、有没有课已经在「此刻」一节里，由模型对上。
+ */
+function priorSection(db: DatabaseSync, ctx: Ctx): ContextSection {
   const facts: string[] = []
   const work = getSetting(db, 'chronotype_workday_wake')
   const rest = getSetting(db, 'chronotype_restday_wake')
   if (work && rest) {
-    facts.push(`工作日 ${work} 起，休息日 ${rest} 起（用户提供的作息）`)
+    facts.push(`有课的日子通常 ${work} 起，没课的日子通常 ${rest} 起（用户填的）`)
+    const workH = wakeHour(work)
+    const restH = wakeHour(rest)
+    const nowH = Number(ctx.now.slice(11, 13)) + Number(ctx.now.slice(14, 16)) / 60
+    if (workH !== null && restH !== null && restH - workH >= 1) {
+      facts.push(`没课的日子比有课的日子晚起约 ${hoursLabel(restH - workH)}，说明有课的日子多半靠闹钟起（推算）`)
+    }
+    const since = (label: string, h: number | null) => {
+      if (h === null) return
+      if (nowH < h) facts.push(`按${label}的起床时间算，现在还早于通常起床时刻（推算）`)
+      else facts.push(`按${label}的起床时间算，此刻距起床约 ${hoursLabel(nowH - h)}（推算）`)
+    }
+    if (workH !== null && restH !== null && workH === restH) since('平时', workH)
+    else { since('有课日', workH); since('没课日', restH) }
   } else {
-    facts.push(`作息时间未知（先验，猜的）`)
+    facts.push(`作息时间未知：用户没有填起床时间（先验，猜的）`)
   }
-  facts.push(`精力存在约 90 分钟的超日节律波动（先验）`)
+  facts.push('人群规律（先验，不是这个人的数据）：起床后约两到四小时是一天里第一个清醒高峰')
+  facts.push('人群规律（先验）：13 点到 15 点前后多数人有一段低谷，午饭后尤其明显')
+  facts.push('人群规律（先验）：通常入睡前两到三小时开始下滑，晚起的人整条曲线相应后移')
+  facts.push('人群规律（先验）：持续专注约每 90 分钟起伏一次，一段专注后需要短暂间歇')
   return { source: 'prior', label: '先验', facts }
+}
+
+/** 「7:30」「07:30」「6:30 前」→ 小时数；「更晚」这种没有数字的选项 → null。 */
+function wakeHour(label: string): number | null {
+  const m = /(\d{1,2}):(\d{2})/.exec(label)
+  if (!m) return null
+  return Number(m[1]) + Number(m[2]) / 60
+}
+
+function hoursLabel(h: number): string {
+  const half = Math.round(h * 2) / 2
+  if (half < 1) return '不到一小时'
+  return Number.isInteger(half) ? `${half} 小时` : `${Math.floor(half)} 个半小时`
+}
+
+function weekdayLabel(day: string): string {
+  const names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  return names[new Date(`${day}T12:00:00+08:00`).getUTCDay()]!
 }
 
 function daysUntil(nowIso: string, at: string | null): number {
