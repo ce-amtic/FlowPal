@@ -80,6 +80,28 @@ export async function signInToRuc(serverUrl: string, token: string | null): Prom
 }
 
 /**
+ * 这一批 Cookie 到底认不认。
+ *
+ * **判据是回来的东西，不是它停在哪个地址。** Electron 的 `session.fetch` 跟完
+ * 重定向之后不保证把 `response.url` 换成终点，于是「没落在 CAS」这一条在一次
+ * 都没登录的时候照样成立——窗口会在用户还没输账号时就自己关掉。
+ *
+ * 认得出来的是内容：登录态可用时门户回一份 JSON，不可用时回的是 CAS 那张登录页
+ * 的 HTML。地址那一条仍然留着，它对的时候是一条免费的否证。
+ */
+function hasSession(url: string, body: string): boolean {
+  if (url.startsWith(CAS_LOGIN)) return false
+  const text = body.trim()
+  if (!text.startsWith('{') && !text.startsWith('[')) return false
+  try {
+    JSON.parse(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * 这一次导航是被后一次顶掉的，不是失败。
  *
  * 重定向链上 ERR_ABORTED(-3) 是常态。Electron 版本之间这个错误有时带 `code`、
@@ -117,7 +139,10 @@ function waitForSession(
         // 用这个分区自己的 fetch，它带的正是登录窗口里那批 Cookie。
         const landing = await rucSession.fetch(PROBE, { redirect: 'follow' }).catch(() => null)
         if (landing === null) return
-        if (!landing.url.startsWith(CAS_LOGIN)) finish(true)
+        const body = await landing.text().catch(() => '')
+        if (!hasSession(landing.url, body)) return
+        console.info(`RUC 登录态可用：${landing.url}`)
+        finish(true)
       })()
     }, 2000)
   })
