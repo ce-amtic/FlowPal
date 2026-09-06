@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
@@ -42,3 +42,13 @@ await esbuild.build({
   },
   logLevel: 'info',
 })
+
+/*
+ * 离线同步的样例数据。runner 用 `new URL('./fixtures/…', import.meta.url)` 找它们，
+ * 而打包之后那个 import.meta.url 指的是 dist/main.mjs——源码树里的 fixtures 目录
+ * 到不了这里。不拷的话，样例同步在打包的壳里必然 ENOENT，而路由把它记成一次
+ * 「RUC 同步失败」，看不出真正的原因。
+ */
+const fixtures = resolve(workspaceRoot, 'packages', 'server', 'src', 'sync', 'fixtures')
+if (!existsSync(fixtures)) throw new Error(`同步样例数据不见了：${fixtures}`)
+cpSync(fixtures, resolve(outDir, 'fixtures'), { recursive: true })
