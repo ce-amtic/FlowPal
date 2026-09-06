@@ -43,17 +43,7 @@ function momentSection(db: DatabaseSync, ctx: Ctx): ContextSection {
   const clock = ctx.now.slice(11, 16)
   facts.push(`现在是 ${today}（${weekdayLabel(today)}）${clock}`)
 
-  // 当日课表：重复项按 rrule 展开到今天，非重复的事件按日期落在今天。
-  // 与日程页同一套展开规则；放不下的 rrule 退回按 startsAt 那一天。
-  // 全天的日子（「学期开始」）不占时段，不算进课密度。
-  const events = listItems(db).filter((i) =>
-    i.type === 'event' && i.status === 'active' && i.startsAt !== null && i.datePrecision !== 'day')
-  const todays = events
-    .filter((i) => {
-      if (i.rrule !== null && supportsRrule(i.rrule)) return occursOn(i.rrule, i.startsAt!, today)
-      return i.startsAt!.slice(0, 10) === today
-    })
-    .sort((a, b) => a.startsAt!.slice(11, 16).localeCompare(b.startsAt!.slice(11, 16)))
+  const todays = timedEventsToday(db, ctx)
   if (todays.length === 0) {
     facts.push('今天没有课，也没有定时的事件')
   } else {
@@ -141,6 +131,19 @@ function observedSection(db: DatabaseSync, ctx: Ctx): ContextSection {
     const ending = s.endedEarly ? '，没做完，用户选了下次继续' : '，做完了'
     facts.push(`今天 ${s.startedAt.slice(11, 16)} 开始${on}，计划 ${s.plannedMinutes} 分钟，实际 ${s.actualMinutes ?? '未填'} 分钟${ending}`)
   }
+  // 往前十四天里停在一半的事。「下次继续」要跨天才有意义——当晚接上是记性，
+  // 十二天后还接得上才是记住了。只看每件事最近的一次：后来又做完了的不算。
+  const latestByItem = new Map<string, (typeof sessions)[number]>()
+  for (const s of sessions) {
+    if (s.itemId && !latestByItem.has(s.itemId)) latestByItem.set(s.itemId, s)
+  }
+  for (const s of latestByItem.values()) {
+    const day = s.startedAt.slice(0, 10)
+    if (day === today || !s.endedEarly) continue
+    const ago = -daysUntil(ctx.now, s.startedAt)
+    if (ago > 14) continue
+    facts.push(`${ago} 天前做「${titleOf.get(s.itemId!) ?? s.itemId}」，计划 ${s.plannedMinutes} 分钟，实际 ${s.actualMinutes ?? '未填'} 分钟，没做完，用户选了下次继续，之后没有再开始过`)
+  }
   if (sessions.length > 0 && sessions.length < 5) {
     facts.push(`专注记录共 ${sessions.length} 次，不足以看出规律`)
   }
@@ -175,14 +178,15 @@ function priorSection(db: DatabaseSync, ctx: Ctx): ContextSection {
     if (workH !== null && restH !== null && restH - workH >= 1) {
       facts.push(`没课的日子比有课的日子晚起约 ${hoursLabel(restH - workH)}，说明有课的日子多半靠闹钟起（推算）`)
     }
-    const since = (label: string, h: number | null) => {
-      if (h === null) return
-      if (nowH < h) facts.push(`按${label}的起床时间算，现在还早于通常起床时刻（推算）`)
-      else if (nowH - h < 1) facts.push(`按${label}的起床时间算，此刻距起床不到一小时（推算）`)
-      else facts.push(`按${label}的起床时间算，此刻距起床约 ${hoursLabel(nowH - h)}（推算）`)
+    // 今天适用哪一个起床时刻，在这里定，不留给模型：给它两个数它就两个都报。
+    // 有课与否看今天有没有按课表展开出来的重复项。
+    const hasClass = timedEventsToday(db, ctx).some((e) => e.rrule !== null)
+    const todayH = hasClass ? workH : restH
+    if (todayH !== null) {
+      if (nowH < todayH) facts.push('现在还早于他通常的起床时刻（推算）')
+      else if (nowH - todayH < 1) facts.push('此刻距起床不到一小时（推算）')
+      else facts.push(`此刻距起床约 ${hoursLabel(nowH - todayH)}（推算）`)
     }
-    if (workH !== null && restH !== null && workH === restH) since('平时', workH)
-    else { since('有课日', workH); since('没课日', restH) }
     const type = chronotypeOf(rest, restH)
     if (type !== null) facts.push(`作息类型：${type}（按没课日的起床时刻推算）`)
   } else {
@@ -201,6 +205,21 @@ function chronotypeOf(label: string, hour: number | null): string | null {
   if (hour <= 8) return '偏早'
   if (hour <= 10) return '居中'
   return '偏晚'
+}
+
+/**
+ * 今天有时刻的事件，按开始时刻排。重复项按 rrule 展开到今天，非重复的按日期落在今天，
+ * 与日程页同一套展开规则。全天的日子（「学期开始」）不占时段，不算。
+ */
+function timedEventsToday(db: DatabaseSync, ctx: Ctx) {
+  const today = ctx.now.slice(0, 10)
+  return listItems(db)
+    .filter((i) => i.type === 'event' && i.status === 'active' && i.startsAt !== null && i.datePrecision !== 'day')
+    .filter((i) => {
+      if (i.rrule !== null && supportsRrule(i.rrule)) return occursOn(i.rrule, i.startsAt!, today)
+      return i.startsAt!.slice(0, 10) === today
+    })
+    .sort((a, b) => a.startsAt!.slice(11, 16).localeCompare(b.startsAt!.slice(11, 16)))
 }
 
 /** 「7:30」「07:30」「6:30 前」→ 小时数；「更晚」这种没有数字的选项 → null。 */
