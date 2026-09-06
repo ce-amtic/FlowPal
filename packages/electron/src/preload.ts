@@ -7,6 +7,7 @@ import {
   isMainWindowFocusChange,
   isPetForwardInput,
   isPetCommand,
+  isPetSize,
   type DesktopInput,
   type DragResult,
   type InlinePetGeometry,
@@ -187,6 +188,11 @@ const pet = {
   endDrag: (): Promise<DragResult> => ipcRenderer.invoke(IPC_CHANNELS.petEndDrag),
   cancelDrag: (): void => {
     ipcRenderer.send(IPC_CHANNELS.petCancelDrag)
+  },
+  setSize: (px: number): void => {
+    // The main process owns the clamp; this guard only keeps a malformed
+    // gesture value from crossing the process boundary at gesture frequency.
+    if (isPetSize(px)) ipcRenderer.send(IPC_CHANNELS.petSetSize, px)
   },
 }
 

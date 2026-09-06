@@ -24,6 +24,7 @@ import { createMainWindow, navigateMain } from './windows/main-window.ts'
 import { createRucOnlineBroker } from './ruc/online-broker.ts'
 import {
   createPetWindow,
+  getPetFloatingSize,
   hidePet,
   sendPetPresentation,
   showPet,
@@ -72,7 +73,6 @@ function initialMainHash(): string {
 }
 
 const PET_A_SIZE = 148
-const PET_B_SIZE = 224
 const DEPARTURE_BOUNCE_MS = 280
 const FLOATING_LAND_MS = 260
 const TELEPORT_OUT_MS = 280
@@ -287,11 +287,14 @@ function inlineBounds(win: BrowserWindow): Rectangle {
 function floatingTargetBounds(start: Rectangle): Rectangle {
   const display = screen.getDisplayMatching(start)
   const workArea = display.workArea
+  // The resident size is whatever the user last pinched the pet to; reading a
+  // constant here would reset every rescale on the next focus hand-off.
+  const size = getPetFloatingSize()
   return {
-    x: Math.round(workArea.x + workArea.width - PET_B_SIZE - 32),
-    y: Math.round(workArea.y + workArea.height - PET_B_SIZE - 32),
-    width: PET_B_SIZE,
-    height: PET_B_SIZE,
+    x: Math.round(workArea.x + workArea.width - size - 32),
+    y: Math.round(workArea.y + workArea.height - size - 32),
+    width: size,
+    height: size,
   }
 }
 
@@ -302,7 +305,7 @@ function forceFloatingPosition(win: BrowserWindow): void {
   presentationSerial += 1
   const start = inlineBounds(win)
   hidePet(petWindow)
-  const pet = ensurePetWindow({ size: PET_B_SIZE })
+  const pet = ensurePetWindow()
   if (!pet) return
   presentationMode = 'floating'
   setPetFloatingDropTarget(true)
@@ -377,7 +380,7 @@ async function transitionToFloating(win: BrowserWindow): Promise<void> {
   // Create/reuse the resident window at its final B-size destination while it
   // is hidden. The old A->B setBounds sequence exposed stale WebGL frames.
   hidePet(petWindow)
-  const pet = ensurePetWindow({ bounds: target, size: PET_B_SIZE })
+  const pet = ensurePetWindow({ bounds: target })
   if (!pet) return
   presentationMode = 'floating'
   setPetFloatingDropTarget(true)
@@ -481,7 +484,7 @@ function setMainWindowFocus(win: BrowserWindow, focused: boolean, force = false)
   }
 }
 
-function ensurePetWindow(options: { bounds?: Rectangle; size?: 148 | 224 } = {}): BrowserWindow | null {
+function ensurePetWindow(options: { bounds?: Rectangle; size?: number } = {}): BrowserWindow | null {
   if (petWindow && !petWindow.isDestroyed()) {
     if (options.bounds) {
       try { petWindow.setBounds(options.bounds) } catch { /* closing */ }
@@ -518,7 +521,7 @@ function ensurePetWindow(options: { bounds?: Rectangle; size?: 148 | 224 } = {})
     win = createPetWindow({
       preloadPath: preloadPath(),
       app: appLocation,
-      size: options.size ?? PET_B_SIZE,
+      size: options.size ?? getPetFloatingSize(),
       bounds: options.bounds,
     })
   } catch (error) {

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { isAllowedAppNavigation, type AppLocation } from './app-location.ts'
 import {
   IPC_CHANNELS,
+  clampPetSize,
   type PetPresentationChange,
   type PetStatus,
   type PetStatusMeta,
@@ -11,8 +12,24 @@ import {
 export type PetWindowOptions = {
   preloadPath: string
   app: AppLocation
-  size?: 148 | 224
+  size?: number
   bounds?: Rectangle
+}
+
+// The user can rescale the resident pet with a pinch/ctrl-wheel gesture. The
+// chosen edge length has to outlive any single window: every focus hand-off
+// re-lays-out the floating pet, and reading a hard-coded constant there would
+// silently undo the user's choice on the next blur.
+let floatingSize = 224
+
+export function getPetFloatingSize(): number {
+  return floatingSize
+}
+
+/** Records the requested edge length, clamped, and returns what was stored. */
+export function setPetFloatingSize(size: number): number {
+  floatingSize = clampPetSize(size)
+  return floatingSize
 }
 
 const pendingStatuses = new WeakMap<BrowserWindow, { status: PetStatus; meta?: PetStatusMeta }>()
@@ -37,9 +54,10 @@ function petUrl(app: AppLocation): string {
 }
 
 export function createPetWindow(options: PetWindowOptions): BrowserWindow {
-  // A=148 is the in-page presentation bounds; B=224 is the always-on-top
-  // resident presentation used during a focus hand-off.
-  const size = options.size ?? 224
+  // A=148 is the in-page presentation bounds; the resident always-on-top
+  // presentation used during a focus hand-off starts at 224 and follows
+  // whatever the user last pinched it to.
+  const size = options.size ?? floatingSize
   const display = screen.getPrimaryDisplay()
   const workArea = display.workArea
   const initialBounds = options.bounds ?? {

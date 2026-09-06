@@ -15,6 +15,7 @@ import {
   isInlinePetGeometry,
   isPetForwardInput,
   isPointerPoint,
+  isPetSize,
   isPetStatus,
   normalizeMainHash,
   type CaptureCapability,
@@ -25,7 +26,12 @@ import {
   type PetStatusMeta,
   type PointerPoint,
 } from './channels.ts'
-import { hidePet, setPetPointerPassthrough, setPetStatus } from '../windows/pet-window.ts'
+import {
+  hidePet,
+  setPetFloatingSize,
+  setPetPointerPassthrough,
+  setPetStatus,
+} from '../windows/pet-window.ts'
 import { focusWindow } from '../lifecycle/single-instance.ts'
 import { navigateMain, type MainWindowOptions } from '../windows/main-window.ts'
 
@@ -190,6 +196,41 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
     setPetPointerPassthrough(pet, false)
   }
 
+  const onSetSize = (event: IpcMainEvent, size: unknown): void => {
+    const pet = state.getPet()
+    if (!pet || !senderIs(event, pet) || !isPetSize(size)) return
+    // A pinch gesture reports continuously and will run past both ends of the
+    // range; clamping is the expected outcome there, not a failure.
+    const next = setPetFloatingSize(size)
+    let current: WindowRectangle
+    try {
+      current = pet.getBounds()
+    } catch {
+      return
+    }
+    // The pet rests against the bottom-right corner. Growing only the width
+    // and height would push it off-screen, so scale around the centre and let
+    // the next floating hand-off re-seat it at the corner with the new size.
+    const centerX = current.x + current.width / 2
+    const centerY = current.y + current.height / 2
+    const bounds = {
+      x: Math.round(centerX - next / 2),
+      y: Math.round(centerY - next / 2),
+      width: next,
+      height: next,
+    }
+    try {
+      // 窗口是 resizable: false 建的——那是为了不让人从边缘拖出一个变形的桌宠。
+      // macOS 对这种窗口的 setBounds 只认位置不认尺寸，所以这一下要临时开一道口，
+      // 改完立刻关上；边缘拖拽因此始终是关着的。
+      pet.setResizable(true)
+      pet.setBounds(bounds)
+      pet.setResizable(false)
+    } catch {
+      // A close/quit can race the gesture; the window is gone either way.
+    }
+  }
+
   const onReadClipboard = async (event: IpcMainInvokeEvent): Promise<string> => {
     if (!senderIsKnown(event, state)) return ''
     return clipboard.readText()
@@ -343,6 +384,7 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
   ipcMain.on(IPC_CHANNELS.petBeginDrag, onBeginDrag)
   ipcMain.on(IPC_CHANNELS.petMoveDrag, onMoveDrag)
   ipcMain.on(IPC_CHANNELS.petCancelDrag, onCancelDrag)
+  ipcMain.on(IPC_CHANNELS.petSetSize, onSetSize)
   ipcMain.handle(IPC_CHANNELS.readClipboard, onReadClipboard)
   ipcMain.handle(IPC_CHANNELS.readClipboardImage, onReadClipboardImage)
   ipcMain.handle(IPC_CHANNELS.petForwardInput, onPetForwardInput)
@@ -362,6 +404,7 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
     ipcMain.removeListener(IPC_CHANNELS.petBeginDrag, onBeginDrag)
     ipcMain.removeListener(IPC_CHANNELS.petMoveDrag, onMoveDrag)
     ipcMain.removeListener(IPC_CHANNELS.petCancelDrag, onCancelDrag)
+    ipcMain.removeListener(IPC_CHANNELS.petSetSize, onSetSize)
     ipcMain.removeHandler(IPC_CHANNELS.readClipboard)
     ipcMain.removeHandler(IPC_CHANNELS.readClipboardImage)
     ipcMain.removeHandler(IPC_CHANNELS.petForwardInput)

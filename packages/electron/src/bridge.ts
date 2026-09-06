@@ -54,6 +54,12 @@ export interface FlowPalDesktopBridge {
     moveDrag(point: PointerPoint): void
     endDrag(): Promise<DragResult>
     cancelDrag(): void
+    /**
+     * Request a new edge length for the resident window, in physical pixels.
+     * The main process clamps to PET_SIZE_LIMITS and scales about the current
+     * centre, so a continuous pinch can call this on every frame.
+     */
+    setSize(px: number): void
   }
   input: {
     onHotkey(callback: () => void): Unsubscribe

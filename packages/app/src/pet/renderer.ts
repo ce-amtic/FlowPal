@@ -37,11 +37,19 @@ export type PetInteraction =
   | { type: 'doubleclick'; pointer: PetPointer }
   | { type: 'pointercancel'; pointer: PetPointer }
   | { type: 'keyboard'; key: string }
+  /** ctrl+滚轮 / 触控板捏合请求的新窗口边长（CSS px，已夹在合法区间内）。 */
+  | { type: 'resize'; size: number }
 
 export interface PetRendererOptions {
   canvas: HTMLCanvasElement
   fallback?: HTMLElement | null
   size?: PetSize
+  /**
+   * 让形体的尺度跟着画布实际尺寸走，而不是被 `size` 封顶。常驻桌宠窗口可以被
+   * ctrl+滚轮 改大小，画布多大形体就该多大；主窗口里的内联宿主则相反——它的
+   * 盒子会比形体大一圈留透明边距，所以默认保持 `size` 封顶。
+   */
+  sizeFollowsCanvas?: boolean
   reducedMotion?: boolean
   onInteraction?: (event: PetInteraction) => void
 }
@@ -157,6 +165,25 @@ const clamp = (value: number, min: number, max: number): number =>
 // settling focus, which made an intended single click open the main window.
 const LONG_PRESS_MS = 800
 
+/**
+ * 截屏卫星按钮的命中矩形，与 pet.css 里 `.pet-shot` 的 right/bottom/width 一致。
+ * 按钮在形体轮廓之外，透明窗口的鼠标穿透又由 hitTest() 决定，所以这块必须一起
+ * 算成命中，否则按钮点不到。
+ */
+const PET_SHOT_OFFSET_X = 52
+const PET_SHOT_OFFSET_Y = 24
+const PET_SHOT_SIZE = 36
+
+/** 窗口边长的可用区间。主进程会再夹一次，这里夹是为了不发无意义的 IPC。 */
+export const PET_MIN_SIZE = 120
+export const PET_MAX_SIZE = 320
+
+/**
+ * 一串连续的滚轮/捏合事件之间，窗口的真实尺寸还没跟上。超过这个间隔就重新以
+ * 画布当前尺寸为基准，避免长期偏离。
+ */
+const PET_ZOOM_IDLE_MS = 400
+
 const spring = (
   position: number,
   velocity: number,
@@ -208,6 +235,10 @@ export class WebGLPetRenderer implements PetRenderer {
   private mounted = false
   private reducedMotion: boolean
   private size: PetSize
+  private readonly sizeFollowsCanvas: boolean
+  /** 连续缩放时的基准边长；窗口尺寸还没跟上时不能从 this.width 重新起算。 */
+  private zoomSize = 0
+  private zoomAt = 0
   private color: PetColor = 'chalk'
   /** Softness is the same 0..1 material parameter used by quiet-pebble. */
   private softness = 0.65
@@ -252,6 +283,7 @@ export class WebGLPetRenderer implements PetRenderer {
     this.canvas = options.canvas
     this.fallback = options.fallback ?? null
     this.size = options.size ?? 96
+    this.sizeFollowsCanvas = options.sizeFollowsCanvas ?? false
     this.reducedMotion = options.reducedMotion ?? this.readReducedMotion()
     this.onInteraction = options.onInteraction
     this.state = new PetStateMachine()
@@ -474,10 +506,25 @@ export class WebGLPetRenderer implements PetRenderer {
     // A hidden/fallback canvas must never keep the transparent Electron window
     // above the user's other apps. Pointer passthrough is driven by this test.
     if (!this.program || this.width <= 0 || this.height <= 0) return false
+    // 卫星按钮不属于形体，但它必须可点。手势那一侧不会因此误伤：按钮是画布之上
+    // 的 DOM 元素，落在这块矩形里的 pointer 事件根本到不了画布的监听器。
+    if (this.pointInShotButton(localPoint)) return true
     const centerY = this.groundY - this.z - this.unit * 0.81 * this.squash
     const horizontal = (localPoint.x - this.x) / (this.unit * 1.18 / Math.sqrt(this.squash))
     const vertical = (localPoint.y - centerY) / (this.unit * 0.83 * this.squash)
     return horizontal ** 4 + vertical ** 4 < 1
+  }
+
+  /** 卫星按钮所占的矩形（画布局部 CSS 像素）。 */
+  private pointInShotButton(point: Point): boolean {
+    const left = this.width / 2 + PET_SHOT_OFFSET_X
+    const top = this.height / 2 + PET_SHOT_OFFSET_Y
+    return (
+      point.x >= left &&
+      point.x <= left + PET_SHOT_SIZE &&
+      point.y >= top &&
+      point.y <= top + PET_SHOT_SIZE
+    )
   }
 
   startDrag(pointer: PetPointer): void {
@@ -684,7 +731,9 @@ export class WebGLPetRenderer implements PetRenderer {
     if (this.canvas.width !== pixelWidth) this.canvas.width = pixelWidth
     if (this.canvas.height !== pixelHeight) this.canvas.height = pixelHeight
     this.groundY = this.height * 0.70
-    this.unit = Math.max(18, Math.min(this.size, this.width * 0.65) / 2.27)
+    // 常驻窗口的边长可变，形体要跟着画布走；内联宿主仍由 size 封顶。
+    const cap = this.sizeFollowsCanvas ? Math.min(this.width, this.height) : this.size
+    this.unit = Math.max(18, Math.min(cap, this.width * 0.65) / 2.27)
     // A hidden inline host remains mounted off-flow, but older styles or a
     // browser transition can still report a transient 0/1px box. Do not scale
     // the logical position from that sentinel size.
@@ -718,6 +767,12 @@ export class WebGLPetRenderer implements PetRenderer {
     this.addListener(this.canvas, 'click', this.blockNativeClick)
     this.addListener(this.canvas, 'dblclick', this.handleDoubleClick)
     this.addListener(this.canvas, 'keydown', this.handleKeyDown)
+    // 捏合与 ctrl+滚轮 在 Chromium 里是同一个事件。挂在 window 上而不是画布上，
+    // 因为卫星按钮盖住的那一块画布收不到 wheel。只有跟着画布走的常驻窗口才装它：
+    // 主窗口里的内联宿主装上就等于吃掉了整页的 ctrl+滚轮。
+    if (this.sizeFollowsCanvas) {
+      this.addListener(window, 'wheel', this.handleWheel, { passive: false })
+    }
     this.addListener(document, 'visibilitychange', this.handleVisibility)
     this.addListener(this.canvas, 'webglcontextlost', this.handleContextLost)
     this.addListener(this.canvas, 'webglcontextrestored', this.handleContextRestored)
@@ -873,6 +928,25 @@ export class WebGLPetRenderer implements PetRenderer {
     else if (keyboard.key.toLowerCase() === 'p') this.press()
     else this.reset()
     this.wake()
+  }
+
+  private readonly handleWheel = (event: Event): void => {
+    const wheel = event as WheelEvent
+    if (!wheel.ctrlKey) return
+    // 不拦下来，Chromium 会把它当成页面缩放。
+    wheel.preventDefault()
+    if (!this.sizeFollowsCanvas) return
+    const now = this.now()
+    const base = now - this.zoomAt > PET_ZOOM_IDLE_MS || this.zoomSize <= 0
+      ? Math.round(this.width)
+      : this.zoomSize
+    this.zoomSize = base
+    this.zoomAt = now
+    // 向上滚（deltaY 为负）＝放大。
+    const next = clamp(Math.round(base - wheel.deltaY * 2), PET_MIN_SIZE, PET_MAX_SIZE)
+    if (next === base) return
+    this.zoomSize = next
+    this.emit({ type: 'resize', size: next })
   }
 
   private readonly handleVisibility = (): void => {
@@ -1259,8 +1333,13 @@ export class WebGLPetRenderer implements PetRenderer {
     this.onInteraction?.(event)
   }
 
-  private addListener<T extends EventTarget>(target: T, type: string, listener: EventListener): void {
-    target.addEventListener(type, listener)
+  private addListener<T extends EventTarget>(
+    target: T,
+    type: string,
+    listener: EventListener,
+    options?: AddEventListenerOptions,
+  ): void {
+    target.addEventListener(type, listener, options)
     this.listeners.push(() => target.removeEventListener(type, listener))
   }
 

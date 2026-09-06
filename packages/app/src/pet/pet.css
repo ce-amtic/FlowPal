@@ -84,6 +84,79 @@ body {
   text-align: center;
 }
 
+/*
+ * 截屏卫星。它挂在形体轮廓之外，所以 renderer.hitTest() 必须把这块矩形也算成
+ * 命中——否则透明窗口的鼠标穿透会让它点不到。那边的矩形按「画布中心加
+ * PET_SHOT_OFFSET_X/Y、边长 PET_SHOT_SIZE」算，改这里的位移要同步改过去。
+ */
+.pet-shot {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  /* 贴着形体的右下沿，不去窗口角落——挂在角上等于把整块透明画布的边界画出来 */
+  transform: translate(52px, 24px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 90%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--card-shadow);
+  color: var(--fg-dim);
+  cursor: pointer;
+  /*
+   * 平时不在。桌宠是桌面上的常驻物，多挂一枚永远亮着的徽章，它就从一个形象变成
+   * 一个工具条。指针过来才出现，走了就收回去。
+   */
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+
+#pet-root[data-hover='true'] .pet-shot {
+  opacity: .78;
+  pointer-events: auto;
+}
+
+.pet-shot:hover,
+.pet-shot:focus-visible {
+  opacity: 1;
+  color: var(--fg);
+  pointer-events: auto;
+  outline: none;
+}
+
+.pet-shot:focus-visible {
+  border-color: var(--accent-line);
+}
+
+.pet-shot:active,
+.pet-shot[data-dragging='true'] {
+  color: var(--accent);
+  opacity: 1;
+  transform: translate(52px, 24px) scale(.94);
+}
+
+.pet-shot-icon {
+  width: 19px;
+  height: 19px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-shot:active,
+  .pet-shot[data-dragging='true'] {
+    transform: none;
+  }
+}
+
 .pet-status {
   position: absolute;
   width: 1px;
@@ -98,8 +171,8 @@ body {
   position: absolute;
   z-index: 2;
   top: 5px;
-  /* pet.html uses a 224px square canvas; anchor to its exact midpoint. */
-  left: 112px;
+  /* 窗口边长可以被捏合改掉，锚点必须跟着画布走，不能写死 224 的中点 */
+  left: 50%;
   width: min(210px, calc(100% - 12px));
   margin: 0;
   padding: 7px 10px;

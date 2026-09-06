@@ -20,6 +20,7 @@ export const IPC_CHANNELS = {
   petMoveDrag: 'flowpal:pet-move-drag',
   petEndDrag: 'flowpal:pet-end-drag',
   petCancelDrag: 'flowpal:pet-cancel-drag',
+  petSetSize: 'flowpal:pet-set-size',
   captureProbe: 'flowpal:capture-probe',
   captureScreenshot: 'flowpal:capture-screenshot',
   hotkeyOpen: 'flowpal:hotkey-open',
@@ -113,6 +114,21 @@ export const DESKTOP_INPUT_LIMITS = {
   /** 一次拖进来的文字上限。超过这个长度的多半是整页正文，不是一条通知。 */
   maxTextLength: 20000,
 } as const
+
+/**
+ * The resident pet is square.  A pinch gesture streams continuous values, so
+ * the ends of the range are a normal result rather than an error: the main
+ * process clamps instead of rejecting.
+ */
+export const PET_SIZE_LIMITS = { min: 120, max: 320 } as const
+
+export function isPetSize(value: unknown): value is number {
+  return isFiniteNumber(value)
+}
+
+export function clampPetSize(value: number): number {
+  return Math.round(Math.min(PET_SIZE_LIMITS.max, Math.max(PET_SIZE_LIMITS.min, value)))
+}
 
 export type DragResult =
   | { ok: true }

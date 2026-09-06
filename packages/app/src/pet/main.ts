@@ -36,11 +36,18 @@ let longPressActive = false
 let externalFileDropActive = false
 let hoverActive = false
 const tapHint = document.querySelector<HTMLElement>('#pet-hint')
+const shotButton = document.querySelector<HTMLButtonElement>('#pet-shot')
+const defaultHintText = tapHint?.textContent ?? ''
 let tapHintTimer = 0
 
-function showTapHint(): void {
+/*
+ * 这个气泡是桌宠窗口里唯一能给人看的一行字：`#pet-status` 是给读屏用的，
+ * 视觉上被裁成 1px。截屏失败（尤其是没给录屏权限）必须让人看见，所以复用它。
+ */
+function showBubble(text: string, durationMs = 3000): void {
   if (!tapHint) return
   window.clearTimeout(tapHintTimer)
+  tapHint.textContent = text
   tapHint.hidden = false
   tapHint.dataset.visible = 'true'
   tapHintTimer = window.setTimeout(() => {
@@ -51,7 +58,11 @@ function showTapHint(): void {
         if (tapHint.dataset.visible === 'false') tapHint.hidden = true
       }, 180)
     }
-  }, 3000)
+  }, durationMs)
+}
+
+function showTapHint(): void {
+  showBubble(defaultHintText)
 }
 
 function hideTapHint(): void {
@@ -100,8 +111,16 @@ const renderer = createPetRenderer({
   // the native window begins at the inline A bounds and grows to this B size
   // during the occlusion hand-off.
   size: 224,
+  // 常驻窗口的边长可以被 ctrl+滚轮 / 捏合改掉，形体要跟着画布走。
+  sizeFollowsCanvas: true,
   onInteraction: (event) => {
     const pet = window.flowpal?.pet
+    if (event.type === 'resize') {
+      // setSize 由主进程侧新增，bridge 类型还没跟上；这里只调用，不改别人的类型。
+      const resizable = pet as unknown as { setSize?: (size: number) => void } | undefined
+      resizable?.setSize?.(event.size)
+      return
+    }
     if (event.type === 'hit') {
       pet?.reportHit(event.inside)
       const focusMode = renderer.state.snapshot.status === 'focus'
@@ -109,6 +128,8 @@ const renderer = createPetRenderer({
       else if (event.inside && !hoverActive) showTapHint()
       else if (!event.inside && hoverActive) hideTapHint()
       hoverActive = event.inside
+      // 截屏那枚按钮平时不在，指针过来才出现（见 pet.css）
+      if (petRoot) petRoot.dataset.hover = event.inside ? 'true' : 'false'
       return
     }
     if (event.type === 'pointerdown') {
@@ -184,6 +205,136 @@ const renderer = createPetRenderer({
     if (event.type === 'pointercancel') renderer.setNativeWindowDrag(false)
   },
 })
+
+/*
+ * 截屏卫星。
+ *
+ * 一次点击（或者把它拖出去再松手）＝ 截一张屏，然后把文件路径交给主窗口投放。
+ * 后半程已经通了：主窗口收到 files 就会跳到「此刻」并开始提取。
+ *
+ * 失败一定要说出来。最常见的是 macOS 没给录屏权限，那种情况下用户不去系统设置
+ * 点一下、不重启应用，再点多少次都是同一个结果——不说清楚就是把人晾在这儿。
+ */
+let captureBusy = false
+
+async function runScreenshotCapture(): Promise<void> {
+  if (captureBusy) {
+    showBubble('还在截，稍等一下')
+    return
+  }
+  const screenshot = window.flowpal?.capture?.screenshot
+  if (!screenshot) {
+    const message = '这个版本还没有截屏能力'
+    renderer.setStatus('error', { message })
+    showBubble(message, 5000)
+    return
+  }
+  captureBusy = true
+  renderer.setStatus('processing', { message: '正在截屏' })
+  /*
+   * 截之前先把桌宠自己的东西收干净。
+   *
+   * 这一屏包括这个窗口——气泡上那句「正在截屏…」和那枚按钮都会被拍进去，然后连
+   * 同截图一起交给模型。等一帧让浏览器把它们真的擦掉再截。
+   */
+  hideTapHint()
+  if (petRoot) petRoot.dataset.hover = 'false'
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  try {
+    const result = await screenshot()
+    if (result.ok) {
+      if (!result.path) throw new Error('截屏报告成功，却没有给出文件路径')
+      forwardInput({ type: 'files', paths: [result.path], source: 'drop' })
+      renderer.setStatus('receiving', { message: '截屏收下了' })
+      showBubble('截屏收下了，正在读它')
+      return
+    }
+    const message = result.reason === 'permission-denied'
+      ? '截不了屏：需要在系统设置里允许录屏，然后重启应用'
+      : `截屏没成功：${result.reason ?? '原因未知'}`
+    renderer.setStatus('error', { message })
+    showBubble(message, 7000)
+  } catch (error) {
+    const message = `截屏出错：${error instanceof Error ? error.message : String(error)}`
+    renderer.setStatus('error', { message })
+    showBubble(message, 7000)
+  } finally {
+    captureBusy = false
+  }
+}
+
+if (shotButton) {
+  const button = shotButton
+  let shotPointer = -1
+  let shotHandledByPointer = false
+  const shotOrigin = { x: 0, y: 0 }
+
+  const canvasPoint = (event: PointerEvent): { x: number; y: number } => {
+    const rect = canvas.getBoundingClientRect()
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top }
+  }
+
+  // 按钮在形体轮廓之外。指针悬到它上面时画布收不到 pointermove，所以主进程的
+  // 穿透开关得由这里翻过来——否则这一下会直接穿到底下的窗口去。
+  button.addEventListener('pointerenter', () => {
+    window.flowpal?.pet?.reportHit(true)
+  })
+  button.addEventListener('pointerleave', (event) => {
+    if (shotPointer !== -1) return
+    window.flowpal?.pet?.reportHit(renderer.hitTest(canvasPoint(event)))
+  })
+
+  button.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    shotPointer = event.pointerId
+    shotOrigin.x = event.clientX
+    shotOrigin.y = event.clientY
+    window.flowpal?.pet?.reportHit(true)
+    try {
+      button.setPointerCapture(event.pointerId)
+    } catch {
+      // 少数嵌入式 WebView 不支持指针捕获。指针留在按钮上时手势照样成立。
+    }
+  })
+
+  // 拖出去再松手是同一件事。形象不跟着走：挪窗口是另一个手势，两者必须分开。
+  button.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== shotPointer) return
+    if (Math.hypot(event.clientX - shotOrigin.x, event.clientY - shotOrigin.y) > 6) {
+      button.dataset.dragging = 'true'
+    }
+  })
+
+  const endShotPointer = (event: PointerEvent, fire: boolean): void => {
+    if (event.pointerId !== shotPointer) return
+    shotPointer = -1
+    button.dataset.dragging = 'false'
+    try {
+      if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId)
+    } catch {
+      // 浏览器可能已经自己释放了捕获。
+    }
+    if (!fire) return
+    shotHandledByPointer = true
+    void runScreenshotCapture()
+  }
+
+  button.addEventListener('pointerup', (event) => endShotPointer(event, true))
+  button.addEventListener('pointercancel', (event) => endShotPointer(event, false))
+
+  // 键盘（Enter/Space）只会走到 click。指针那一路已经处理过的，这里不要重复触发。
+  button.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (shotHandledByPointer) {
+      shotHandledByPointer = false
+      return
+    }
+    void runScreenshotCapture()
+  })
+}
 
 // Keep the approved prototype's small public animation surface available in
 // the production pet page. The controls are intentionally absent from the
