@@ -8,7 +8,13 @@ import { api } from '../../api.ts'
  * 「第 3 步 updateItem」没有。所以工具名与参数在这里就地翻成一句人话，服务端
  * 不管这件事：同一条流将来桌宠那边也要用，两处的说法可以不一样。
  */
-export type RunStep = { at: string; verb: string; target: string }
+export type RunStep = {
+  at: string
+  verb: string
+  target: string
+  /** 这一步动没动库。等待态那颗球照它换形状：找东西和改东西不是一回事 */
+  writing: boolean
+}
 
 export type RunState = {
   steps: RunStep[]
@@ -35,19 +41,22 @@ function actFor(e: ToolEvent, titleOf: (id: string) => string | undefined): Omit
   const id = typeof e.args.id === 'string' ? e.args.id : undefined
   const named = id ? titleOf(id) ?? shortId(id) : undefined
   switch (e.tool) {
-    case 'getItem': return { verb: '读取', target: named ? `「${named}」` : '已有条目' }
+    case 'getItem': return { verb: '读取', target: named ? `「${named}」` : '已有条目', writing: false }
     case 'searchItems': return {
       verb: '查找',
       target: typeof e.args.query === 'string' && e.args.query ? `「${e.args.query}」` : '相关条目',
+      writing: false,
     }
-    case 'getProject': return { verb: '读取', target: '项目' }
+    case 'getProject': return { verb: '读取', target: '项目', writing: false }
     case 'createItem': return {
       verb: '记下',
       target: typeof e.args.title === 'string' ? `「${e.args.title}」` : '一条',
+      writing: true,
     }
-    case 'updateItem': return { verb: '更新', target: named ? `「${named}」` : '一条' }
-    case 'dropItem': return { verb: '丢弃', target: named ? `「${named}」` : '一条' }
-    default: return { verb: '处理', target: '' }
+    case 'updateItem': return { verb: '更新', target: named ? `「${named}」` : '一条', writing: true }
+    case 'dropItem': return { verb: '丢弃', target: named ? `「${named}」` : '一条', writing: true }
+    // 认不出的工具按读算：说它在改东西而其实没改，比反过来更糟
+    default: return { verb: '处理', target: '', writing: false }
   }
 }
 

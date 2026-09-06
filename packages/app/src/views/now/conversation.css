@@ -55,6 +55,7 @@
 .talk-latest:disabled { cursor: default; }
 
 /* 收场的记号，占球那一格，弱于那句话本身 */
+/* 收场的记号，占球那一格，弱于那句话本身 */
 .talk-mark {
   flex: 0 0 auto;
   color: var(--fg-faint);

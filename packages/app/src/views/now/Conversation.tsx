@@ -6,7 +6,7 @@ import { api, queryKeys } from '../../api.ts'
 import { ICON } from '../../tokens/icons.ts'
 import { transition } from '../../tokens/motion.ts'
 import { Markup } from '../../shell/Markup.tsx'
-import { Orbs } from '../../shell/Orbs.tsx'
+import { ORB_SIZE, Orbs } from '../../shell/Orbs.tsx'
 import { type RunStep, stepText, useRunStream } from './useRunStream.ts'
 import './conversation.css'
 
@@ -81,10 +81,10 @@ function Steps({ steps, running, settled }: { steps: RunStep[]; running: boolean
           三种收场各有各的记号，也省得只靠时态去分辨。
         */}
         {running
-          ? <Orbs />
+          ? <Orbs kind={latest ? (latest.writing ? 'writing' : 'reading') : 'starting'} />
           : settled
-            ? <Check className="talk-mark" size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />
-            : <Unplug className="talk-mark" size={ICON.size} strokeWidth={ICON.stroke} aria-hidden />}
+            ? <Check className="talk-mark" size={ORB_SIZE} strokeWidth={ICON.stroke} aria-hidden />
+            : <Unplug className="talk-mark" size={ORB_SIZE} strokeWidth={ICON.stroke} aria-hidden />}
         <span>{latest ? stepText(latest, settled) : '正在处理'}</span>
         {steps.length > 1 && <span className="talk-count">{open ? '收起' : `${steps.length} 步`}</span>}
       </button>
