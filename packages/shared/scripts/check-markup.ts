@@ -195,6 +195,15 @@ const CASES: Case[] = [
     expect: (b) => summary(b) === 'run:item[itm_a1]',
   },
   {
+    /*
+     * 多打一个冒号，把元素写成了容器。当容器收的话，元素的名字会变成标题——
+     * 屏幕上就是一行光秃秃的 id。真跑出来过一次。
+     */
+    name: '把 ::item 写成 :::item，仍然当元素收',
+    source: ':::item itm_a1 机器学习部分',
+    expect: (b) => summary(b) === 'run:item[itm_a1]',
+  },
+  {
     name: '空输入不炸',
     source: '',
     expect: (b) => b.length === 0,

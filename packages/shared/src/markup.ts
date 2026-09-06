@@ -230,8 +230,18 @@ export function parseMarkup(source: string): MarkupBlock[] {
     }
 
     if (line.startsWith(':::')) {
-      flushParagraph()
       const { tag, rest } = splitTag(line.slice(3))
+      /*
+       * 多打一个冒号。`:::item itm_a1 机器学习部分` 是把元素写成了容器，而元素的名字
+       * 当不了标题——那样屏幕上会出现一行光秃秃的 id。按它本来的意思收下。
+       */
+      const asElement = !CONTAINER_BY_TAG.has(tag) ? ELEMENT_BY_TAG.get(tag) : undefined
+      if (asElement) {
+        flushParagraph()
+        pushElement(parseElement(asElement, rest))
+        continue
+      }
+      flushParagraph()
       // 不认识的容器照样收内容，当成最朴素的那种——里面的东西比那个标签要紧
       stack.push({ tag: CONTAINER_BY_TAG.get(tag)?.tag ?? 'list', title: rest, blocks: [] })
       continue
@@ -343,11 +353,14 @@ export function markupGuide(): string {
     '',
     '写法：`::标签 主语 {属性} 正文`，一行一个，独占一行。',
     '',
-    '**标题、日期、状态、还剩几天，一律不要写进你的话里**——你只给 id，应用自己查，',
+    '**标出来的那一条，标题、日期、状态、还剩几天都不用你写**——你只给 id，应用自己查，',
     '而且查出来的一定对。正文写的是那一句别人看不出来的判断；没有就不写。',
     '',
-    '**正文里一个日期都不许出现。**不许写「周三晚上截止」「明天要交」「还剩五天」——',
-    '那一行右边就写着，你再写一遍就是让人把同一件事读两遍。',
+    '**`::` 那一行的正文里，一个日期都不许出现。**不许写「周三晚上截止」「明天要交」',
+    '「还剩五天」——那一行右边就写着，你再写一遍就是让人把同一件事读两遍。',
+    '',
+    '这一条只管 `::` 那一行的正文。**普通的话里该说日期就说**——没有标出任何一条时，',
+    '日期只有你会说。宁可把话说完整，也不要为了躲开一个日期把句子掐断。',
     '',
     '```',
     '不好  ::item itm_a1 今晚截止的数据结构第三次作业',
