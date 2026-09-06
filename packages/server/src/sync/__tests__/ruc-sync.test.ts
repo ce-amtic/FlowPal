@@ -155,7 +155,9 @@ test('ExternalRecord contract and mapper retain structured citations', () => {
     id: 'fixture-fragment', createdAt: observedAt, device: 'test', source: 'timetable',
     rawType: 'structured', rawBlobPath: null, rawText: batches[1]?.rawText ?? null,
   })
-  assert.equal(mapped[0]?.title, '计算机网络01')
+  // mapStructured 现在还的是 MappedItem：条目外面还包着一个 externalId，
+  // 落库靠它做覆盖判定
+  assert.equal(mapped[0]?.item.title, '计算机网络01')
 })
 
 test('exam records remain explicitly unsupported until an endpoint is verified', () => {

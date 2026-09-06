@@ -8,7 +8,9 @@ import type {
   SettingsPatch,
   SettingsPublic,
   SyncRun,
-  SyncStatus,
+  // 另一套同步实现（sync/runner.ts）的状态形状。界面用的是本文件里那个同名类型，
+  // 两者不是一回事，所以这一个在这里改个名字
+  SyncStatus as SyncRunnerStatus,
 } from '@flowpal/shared'
 
 export type { Citation, Item, Project, Run }
@@ -82,8 +84,12 @@ export type AgendaEntry = {
 export type AgendaView = {
   from: string
   to: string
-  days: { day: string; items: AgendaEntry[] }[]
-  recurring: AgendaEntry[]
+  days: {
+    day: string
+    items: AgendaEntry[]
+    /** 那天发生的重复项。不占条目位置，界面压成这一天顶上的细带 */
+    recurring: AgendaEntry[]
+  }[]
 }
 
 export type AgendaResponse = AgendaView
@@ -134,6 +140,71 @@ export type NewFocusSession = {
  */
 export type RunOutcome = { status: 'done' | 'failed'; message: string | null }
 
+/**
+ * 和外部来源同步的状态。
+ *
+ * **失败不重试，所以失败必须有个看得见的落点**，就是这里。设置页把它显示成
+ * 「上次同步 09:12 · 需要重新登录」。桌宠不为后台同步失败弹东西。
+ */
+/**
+ * 一路来源这一轮的结果。
+ *
+ * `idle` 与 `failed` 是两件事：邮件没配、第一次同步只记水位，都是正常状态；
+ * 登录过期、接口变了才是失败。合成一个的话，第一次同步会被报成失败。
+ */
+export type SyncSourceResult = {
+  label: string
+  created: number
+  updated: number
+  state: 'ok' | 'idle' | 'failed'
+  /** 非 ok 时的那一句话 */
+  note: string | null
+}
+
+export type SyncStatus = {
+  /** never = 一次都没同步过；expired = 登录态失效，要重新登录 */
+  state: 'never' | 'ok' | 'expired' | 'error'
+  at: string | null
+  message: string | null
+  sources: SyncSourceResult[]
+  signedIn: boolean
+  signedInAt: string | null
+}
+
+/**
+ * 一个邮箱账号。
+ *
+ * **既没有密文也没有明文。** 密文只在桌面端与 server 之间走，界面没有任何理由
+ * 见到它；明文只在用户刚打完字的那一刻存在于表单里，送出去就没了。
+ */
+export type MailAccount = {
+  id: string
+  host: string
+  port: number
+  username: string
+  /** 一轮至多读几封。读邮件要过模型，这是花销上限 */
+  perRun: number
+  enabled: boolean
+  /**
+   * server 手上有没有这个账号的授权码明文。
+   *
+   * 冷启动之后由桌面端解密推进来。为假时这个账号这一轮会被跳过，设置页显示
+   * 「需要在桌面应用里解锁」——那与「授权码不对」是两回事，下一步也不同。
+   */
+  unlocked: boolean
+}
+
+export type NewMailAccount = {
+  host: string
+  port: number
+  username: string
+  /** 系统钥匙串加密后的 base64。落库的是它 */
+  passwordCipher: string
+  /** 同一串授权码的明文。只进 server 的内存，不落库 */
+  password: string
+  perRun: number
+}
+
 export type Api = {
   listItems: () => Promise<{ items: ItemWithSources[] }>
   getItem: (id: string) => Promise<{ item: ItemWithSources; history: ItemHistoryRow[] }>
@@ -174,15 +245,32 @@ export type Api = {
   listFocusSessions: () => Promise<{ sessions: FocusSession[] }>
   startFocus: (input: FocusStartInput) => Promise<{ session: FocusSession }>
   endFocus: (id: string, input: FocusEndInput) => Promise<FocusResponse>
-  getSettings: () => Promise<{ settings: Settings; sync: SyncStatus }>
-  saveSettings: (patch: SettingsPatch) => Promise<{ settings: SettingsPublic; sync: SyncStatus }>
-  getSyncStatus: () => Promise<{ status: SyncStatus }>
+  // `sync` 这一项是另一套同步实现的运行状态，跟设置页显示的那个同步状态不是一回事
+  getSettings: () => Promise<{ settings: Settings; sync: SyncRunnerStatus }>
+  saveSettings: (patch: SettingsPatch) => Promise<{ settings: SettingsPublic; sync: SyncRunnerStatus }>
+  /**
+   * 同步运行的历史与来源能力，来自另一套同步实现（`sync/runner.ts`）。它没有接线，
+   * 界面上的同步状态走下面那个 `getSyncStatus`。
+   */
+  getSyncRunStatus: () => Promise<{ status: SyncRunnerStatus }>
   runSync: (
     source?: 'ruc.portal' | 'ruc.graduate' | null,
     mode?: 'online' | 'fixture',
     options?: { payload?: unknown; term?: { code: string; name: string } },
   ) => Promise<{ run?: SyncRun; runId?: string; imported?: number }>
   patchSettings: (patch: Partial<Record<keyof Settings, string>>) => Promise<{ settings: Settings }>
+  getSyncStatus: () => Promise<SyncStatus>
+  /** 现在就同步一次。正在跑时服务端回 409，调用方不重试——那一轮会把活干完 */
+  syncNow: () => Promise<{ state: string; message: string; status: SyncStatus }>
+  signOutOfRuc: () => Promise<{ status: SyncStatus }>
+  listMailAccounts: () => Promise<{ accounts: MailAccount[] }>
+  addMailAccount: (account: NewMailAccount) => Promise<{ account: MailAccount }>
+  patchMailAccount: (
+    id: string, patch: Partial<NewMailAccount> & { enabled?: boolean },
+  ) => Promise<{ account: MailAccount }>
+  removeMailAccount: (id: string) => Promise<{ accounts: MailAccount[] }>
+  /** 当场连一次。主机写错、端口不对、授权码填成登录密码，在状态行上长得一样 */
+  testMailAccount: (id: string) => Promise<{ ok: boolean; unseen?: number; message?: string }>
   postFocusSession: (session: NewFocusSession) => Promise<{ session: { id: string } }>
   /**
    * 把一张图的字节存进库目录，拿回它的绝对路径。
@@ -261,11 +349,21 @@ const realApi: Api = {
   endFocus: (id, input) => call(`/api/focus/${id}/end`, { method: 'POST', body: JSON.stringify(input) }),
   getSettings: () => call('/api/settings'),
   saveSettings: (patch) => call('/api/settings', { method: 'PUT', body: JSON.stringify(patch) }),
-  getSyncStatus: () => call('/api/sync/status'),
+  getSyncRunStatus: () => call('/api/sync/status'),
   runSync: (source = null, mode = 'online', options = {}) => call('/api/sync/run', {
     method: 'POST', body: JSON.stringify({ source, mode, ...options }),
   }),
   patchSettings: (patch) => call('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+  getSyncStatus: () => call('/api/sync'),
+  syncNow: () => call('/api/sync', { method: 'POST' }),
+  signOutOfRuc: () => call('/api/sync/session', { method: 'DELETE' }),
+  listMailAccounts: () => call('/api/mail-accounts'),
+  addMailAccount: (account) =>
+    call('/api/mail-accounts', { method: 'POST', body: JSON.stringify(account) }),
+  patchMailAccount: (id, patch) =>
+    call(`/api/mail-accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  removeMailAccount: (id) => call(`/api/mail-accounts/${id}`, { method: 'DELETE' }),
+  testMailAccount: (id) => call(`/api/mail-accounts/${id}/test`, { method: 'POST' }),
   postFocusSession: (session) =>
     call('/api/focus-sessions', { method: 'POST', body: JSON.stringify(session) }),
   uploadImage: (contentType, base64) =>
@@ -288,4 +386,6 @@ export const queryKeys = {
   confirmations: ['confirmations'] as const,
   thoughts: ['thoughts'] as const,
   settings: ['settings'] as const,
+  sync: ['sync'] as const,
+  mailAccounts: ['mail-accounts'] as const,
 }

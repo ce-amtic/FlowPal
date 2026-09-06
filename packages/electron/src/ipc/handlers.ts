@@ -35,9 +35,15 @@ export type DesktopWindowState = {
   getMainOptions: () => MainWindowOptions
   getInlinePetGeometry: () => InlinePetGeometry | null
   setInlinePetGeometry: (geometry: InlinePetGeometry) => void
-  openRucLogin: () => void
+  /** 开登录窗口，登录成功后把 Cookie 交给 server。结果要回到设置页上 */
+  openRucLogin: () => Promise<SignInResult>
+  /** 把邮箱授权码交给系统钥匙串加密。只有主进程够得着钥匙串 */
+  encryptSecret: (plain: string) => EncryptResult
   forwardDesktopInput: (input: DesktopInput) => void
 }
+
+export type SignInResult = { ok: true; saved: number } | { ok: false; message: string }
+export type EncryptResult = { ok: true; cipher: string } | { ok: false; message: string }
 
 export type IpcHandlerController = {
   dispose: () => void
@@ -270,9 +276,15 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
     }
   }
 
-  const onOpenRucLogin = (event: IpcMainInvokeEvent): void => {
-    if (!senderIsKnown(event, state)) return
-    state.openRucLogin()
+  const onOpenRucLogin = async (event: IpcMainInvokeEvent): Promise<SignInResult> => {
+    if (!senderIsKnown(event, state)) return { ok: false, message: '这个窗口不能发起登录' }
+    return state.openRucLogin()
+  }
+
+  const onEncryptSecret = (event: IpcMainInvokeEvent, plain: unknown): EncryptResult => {
+    if (!senderIsKnown(event, state)) return { ok: false, message: '这个窗口不能加密' }
+    if (typeof plain !== 'string' || plain === '') return { ok: false, message: '授权码是空的' }
+    return state.encryptSecret(plain)
   }
 
   const onEndDrag = (event: IpcMainInvokeEvent): DragResult => {
@@ -336,6 +348,7 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
   ipcMain.handle(IPC_CHANNELS.openMain, onOpenMain)
   ipcMain.handle(IPC_CHANNELS.petOpenMain, onPetOpenMain)
   ipcMain.handle(IPC_CHANNELS.openRucLogin, onOpenRucLogin)
+  ipcMain.handle(IPC_CHANNELS.encryptSecret, onEncryptSecret)
   ipcMain.handle(IPC_CHANNELS.petEndDrag, onEndDrag)
   ipcMain.handle(IPC_CHANNELS.captureProbe, onCaptureProbe)
   ipcMain.handle(IPC_CHANNELS.captureScreenshot, onCaptureScreenshot)
@@ -354,6 +367,7 @@ export function registerIpcHandlers(state: DesktopWindowState): IpcHandlerContro
     ipcMain.removeHandler(IPC_CHANNELS.openMain)
     ipcMain.removeHandler(IPC_CHANNELS.petOpenMain)
     ipcMain.removeHandler(IPC_CHANNELS.openRucLogin)
+    ipcMain.removeHandler(IPC_CHANNELS.encryptSecret)
     ipcMain.removeHandler(IPC_CHANNELS.petEndDrag)
     ipcMain.removeHandler(IPC_CHANNELS.captureProbe)
     ipcMain.removeHandler(IPC_CHANNELS.captureScreenshot)

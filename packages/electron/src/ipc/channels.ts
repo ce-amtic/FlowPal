@@ -13,6 +13,7 @@ export const IPC_CHANNELS = {
   openMain: 'flowpal:open-main',
   petOpenMain: 'flowpal:pet-open-main',
   openRucLogin: 'flowpal:open-ruc-login',
+  encryptSecret: 'flowpal:encrypt-secret',
   setPetStatus: 'flowpal:set-pet-status',
   petReportHit: 'flowpal:pet-report-hit',
   petBeginDrag: 'flowpal:pet-begin-drag',

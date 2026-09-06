@@ -103,7 +103,8 @@ const input = {
 
 const windows = {
   openMain: (hash?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openMain, hash),
-  openRucLogin: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openRucLogin),
+  openRucLogin: (): Promise<{ ok: boolean; saved?: number; message?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.openRucLogin),
   hidePet: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.hidePet),
   onMainWindowFocusChanged: listenMainWindowFocusChanged,
   reportPetGeometry: (geometry: InlinePetGeometry): void => {
@@ -156,6 +157,12 @@ const bridge: FlowPalDesktopBridge = {
   hideWindow: windows.hidePet,
   openMain: windows.openMain,
   openRucLogin: windows.openRucLogin,
+  /*
+   * 登录要一个真的浏览器窗口，加密要系统钥匙串，两样都只有主进程够得着。走 IPC
+   * 而不是 HTTP，分界线仍是「手机端将来要不要得起」——手机端要不起这两样。
+   */
+  signInToRuc: () => ipcRenderer.invoke(IPC_CHANNELS.openRucLogin),
+  encryptSecret: (plain: string) => ipcRenderer.invoke(IPC_CHANNELS.encryptSecret, plain),
   setPetStatus: pet.setStatus,
   pet,
   input,

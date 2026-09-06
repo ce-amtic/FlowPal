@@ -330,9 +330,18 @@ export const AGENDA: AgendaView = {
   from: day(0),
   to: day(13),
   days: [
-    { day: day(2), items: [{ item: byId('i_mail'), project: { id: 'p_intern', name: '实习申请' } }] },
-    { day: day(5), items: [{ item: byId('i_signup'), project: null }] },
-    { day: day(10), items: [{ item: byId('i_midterm'), project: { id: 'p_math', name: '高等数学' } }] },
-  ],
-  recurring: [{ item: byId('i_seminar'), project: { id: 'p_ds', name: '数据结构' } }],
+    {
+      day: day(2),
+      items: [{ item: byId('i_mail'), project: { id: 'p_intern', name: '实习申请' } }],
+      recurring: [{ item: byId('i_seminar'), project: { id: 'p_ds', name: '数据结构' } }],
+    },
+    { day: day(5), items: [{ item: byId('i_signup'), project: null }], recurring: [] },
+    {
+      day: day(10),
+      items: [{ item: byId('i_midterm'), project: { id: 'p_math', name: '高等数学' } }],
+      recurring: [],
+    },
+    // 只有课、没有别的事的那一天。它必须在，否则「今天三节课」在日程上是空的。
+    { day: day(9), items: [], recurring: [{ item: byId('i_seminar'), project: { id: 'p_ds', name: '数据结构' } }] },
+  ].sort((a, b) => a.day.localeCompare(b.day)),
 }

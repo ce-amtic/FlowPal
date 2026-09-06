@@ -29,7 +29,7 @@ const config = {
     text: { baseUrl: 'https://text.invalid/v1', apiKey: 'test', model: 'test' },
     vision: { baseUrl: 'https://vision.invalid/v1', apiKey: 'test', model: 'test' },
   },
-  ruc: null,
+  sync: { noticesPerRun: 3, intervalMinutes: 360 },
 } as ServerConfig
 
 const ICS = [

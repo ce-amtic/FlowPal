@@ -42,17 +42,27 @@ function day(days: number): string {
   return at(days, 10).slice(0, 10)
 }
 
-/** 相对日期的星期几（周X），嵌进碎片原文用——写错星期的通知看起来是假的。 */
-function dowLabel(days: number): string {
+/**
+ * 相对日期是星期几（0=周日..6=周六）。
+ *
+ * **必须先挪到东八区再读。** 直接对那个时刻取 `getUTCDay()`，凌晨零点到八点之间
+ * 跑出来的星期比 `at()` 给的日期早一天：种子文案上写着「每周二」，条目落在周三，
+ * 而两者都不报错。
+ */
+function dow(days: number): number {
   const base = new Date(now)
   base.setUTCDate(base.getUTCDate() + days)
-  return '周' + '日一二三四五六'[base.getUTCDay()]
+  return new Date(base.getTime() + 8 * 3600_000).getUTCDay()
+}
+
+/** 相对日期的星期几（周X），嵌进碎片原文用——写错星期的通知看起来是假的。 */
+function dowLabel(days: number): string {
+  return '周' + '日一二三四五六'[dow(days)]
 }
 
 /** 从现在起最近的一个星期几（0=周日..6=周六）的 hour:minute。 */
-function nextDow(dow: number, hour: number, minute = 0): string {
-  const cur = new Date(now).getUTCDay()
-  return at((dow - cur + 7) % 7, hour, minute)
+function nextDow(target: number, hour: number, minute = 0): string {
+  return at((target - dow(0) + 7) % 7, hour, minute)
 }
 
 const ctxFor = (daysAgo: number, hour = 9): Ctx => createCtx(calendar, at(-daysAgo, hour))

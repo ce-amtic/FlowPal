@@ -55,6 +55,20 @@ export const ModelConfig = z.object({
 })
 export type ModelConfig = z.infer<typeof ModelConfig>
 
+export const SyncConfig = z.object({
+  /**
+   * 一次同步至多把几条通知公告送进 agent 循环。
+   *
+   * 通知是散文，日期藏在句子里，只有模型算得出来，所以这一路要花钱。门户上通知
+   * 每天几十条，没有配额的话，第一个早上就能把额度烧掉一大半，而那时没有人看着。
+   * 设成 0 就是不处理通知，课表与校历照旧。
+   */
+  noticesPerRun: z.number().int().nonnegative().default(3),
+  /** 自动同步的间隔（分钟）。课表与考试变化很慢，六小时绰绰有余 */
+  intervalMinutes: z.number().int().positive().default(360),
+})
+export type SyncConfig = z.infer<typeof SyncConfig>
+
 export const ServerConfig = z.object({
   /** 默认只监听本机。局域网监听（手机端）是显式开关，开了就要 token。 */
   host: z.string().default('127.0.0.1'),
@@ -72,7 +86,11 @@ export const ServerConfig = z.object({
     /** 图片不走 OCR，直接交视觉模型 */
     vision: ModelConfig,
   }),
-  ruc: z.object({ studentId: z.string(), password: z.string() }).nullable().default(null),
+  /**
+   * 邮箱账号不在这里，在库里（`mail_accounts` 表），因为它要能在设置页上随时增删改。
+   * 配置文件里剩下的都是启动时定死、运行中不改的东西。
+   */
+  sync: SyncConfig.default({ noticesPerRun: 3, intervalMinutes: 360 }),
 })
 export type ServerConfig = z.infer<typeof ServerConfig>
 

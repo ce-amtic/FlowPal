@@ -17,7 +17,7 @@
 - **003** [[003-product-form-open|产品形态未定：陪伴与规划如何融合、陪伴形象是什么、主界面长什么样]] — 2026-09-04 — answered by 009; tags: bootstrap, product; cited by 2
 - **004** [[004-multi-device-sync-open|多设备同步走什么机制]] — 2026-09-04 — answered by 006; tags: bootstrap, collection; cited by 1
 
-## Decisions (16)
+## Decisions (18)
 
 - **001** [[001-fragment-immutable-item-derived-with-citations|原始碎片不可变永不删除，条目派生可改，每个字段带原文引用]] — 2026-09-04 — tags: bootstrap, collection; cited by 4
 - **002** [[002-llm-tone-present-not-judging|LLM 回应语气：在场而不评判，说中具体细节，不责备不催不谈意志力]] — 2026-09-04 — tags: bootstrap, companion; cited by 3
@@ -35,3 +35,5 @@
 - **023** [[023-run-summary-survives-the-run|进行中那一行在跑完之后留下，消失的只是加载动画]] — 2026-09-06 — tags: product, architecture; cited by 1
 - **024** [[024-markup-render-exhaustiveness|回复标记的渲染分支由类型系统保证穷尽]] — 2026-09-06 — tags: architecture
 - **025** [[025-fragment-response-splits-on-the-model|投放的响应形状按「经不经模型」分成两种]] — 2026-09-06 — tags: architecture, collection
+- **026** [[026-school-auth-is-a-real-login-window|学校系统的鉴权是一次真人登录加 Cookie 搬运，程序不碰密码]] — 2026-09-06 — tags: collection, architecture; cited by 1
+- **027** [[027-mail-secrets-encrypted-at-rest|邮箱授权码密文入库、明文只在内存，账号是库里的数据不是配置]] — 2026-09-06 — tags: collection, architecture

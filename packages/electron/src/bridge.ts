@@ -34,7 +34,10 @@ export interface FlowPalDesktopBridge {
   readClipboardImage(): Promise<string | null>
   hideWindow(): Promise<void>
   openMain(hash?: string): Promise<void>
-  openRucLogin(): Promise<void>
+  /** 开登录窗口并把 Cookie 交给 server。返回这次登录成没成 */
+  openRucLogin(): Promise<{ ok: boolean; saved?: number; message?: string }>
+  signInToRuc(): Promise<{ ok: boolean; saved?: number; message?: string }>
+  encryptSecret(plain: string): Promise<{ ok: boolean; cipher?: string; message?: string }>
   setPetStatus(status: PetStatus, meta?: PetStatusMeta): void
 
   pet: {

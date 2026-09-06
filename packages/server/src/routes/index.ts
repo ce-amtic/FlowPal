@@ -7,11 +7,11 @@ import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { Calendar, Run } from '@flowpal/shared'
 import {
-  createCtx, nowInShanghai, FragmentSource, RawType, NowOutput, nowJsonSchema,
+  createCtx, nowInShanghai, occursOn, supportsRrule,
+  FragmentSource, RawType, NowChoice, NowOutput, nowJsonSchema,
   EndFocusRequest, SettingsPatch, StartFocusRequest, SyncRunRequest,
 } from '@flowpal/shared'
 import type { RucExternalSource } from '@flowpal/shared'
-import { NowChoice } from '@flowpal/shared'
 import type { ServerConfig } from '../config.ts'
 import { newId } from '../store/db.ts'
 import { insertFragment, getFragment, listFragments } from '../store/fragments.ts'
@@ -45,6 +45,14 @@ import { ExternalShapeError, UnsupportedExternalSourceError } from '../sync/type
 import { getSetting, setSetting } from '../store/settings.ts'
 import { extract } from '../pipeline/extract.ts'
 import { mapStructured } from '../pipeline/map-structured.ts'
+import { applyMapped } from '../sync/apply.ts'
+import { markSignedIn, readSyncStatus, RucCookies, runSync } from '../sync/index.ts'
+import { MailSecrets } from '../sync/secrets.ts'
+import { testMailbox } from '../sync/mail.ts'
+import {
+  createMailAccount, deleteMailAccount, getMailAccount, listMailAccounts, updateMailAccount,
+} from '../store/mail-accounts.ts'
+import type { MailAccount } from '../store/mail-accounts.ts'
 import { buildContext } from '../context/build.ts'
 import { callJson } from '../llm/client.ts'
 import { runAgentLoop, type AgentLoopEvent } from '../agent/loop.ts'
@@ -81,6 +89,12 @@ export function createRoutes(
 
   /** 唯一允许读系统时钟的地方：请求入口。往下一路传 ctx.now。 */
   const ctxOf = () => createCtx(calendar, nowInShanghai())
+
+  /** 学校系统的登录态。落在 dataDir 里，冷启动不用重新登录。 */
+  const cookies = RucCookies.open(join(config.dataDir, 'ruc-cookies.json'))
+  /** 邮箱授权码的明文。只在内存里，进程退出即无。 */
+  const secrets = new MailSecrets()
+  let syncing = false
 
   // ── 跨窗口广播 ──────────────────────────────────────────────────────
   // 任何写操作后广播一条粗粒度的「变了」。事件不携带内容：实体在库里另有真相，
@@ -159,6 +173,20 @@ export function createRoutes(
     rawText: z.string().nullable().optional(),
     rawBlobPath: z.string().max(4096).refine((value) => !/[\u0000]/.test(value), '文件路径包含非法字符').nullable().optional(),
     device: z.string().optional(),
+  })
+
+  /** 浏览器窗口里那次真人登录留下的 Cookie。形状照 Electron 的 cookies API。 */
+  const SessionBody = z.object({
+    cookies: z.array(z.object({
+      name: z.string(),
+      value: z.string(),
+      domain: z.string(),
+      path: z.string(),
+      secure: z.boolean(),
+      httpOnly: z.boolean(),
+      /** Unix 秒。会话 Cookie 没有这一项 */
+      expirationDate: z.number().optional(),
+    })),
   })
 
   app.get('/api/fragments', (c) => c.json({ fragments: listFragments(db) }))
@@ -252,35 +280,21 @@ export function createRoutes(
     void process()
     return c.json({ fragment, run }, 202)
 
-    /** 不经模型的那条路。抛出的话由调用处收成一次失败的 run，碎片照样留着 */
+    /**
+     * 不经模型的那条路。
+     *
+     * 判定靠 `external_id` 这个主键，落库走 `applyMapped`——定时同步用的是同一段，
+     * 所以「同一份课表连拉两次不新增条目」这条不变量只有一处需要成立。
+     */
     function importStructured(): ItemWithSources[] {
       try {
-        // B 的同步路径另有 upsertByExternalId：同一个外部 id 再来一次是改，不是新增
-        const candidates = mapStructured(ctx, fragment)
-        let created = 0
-        let updated = 0
-        const itemIds = candidates.map((e, index) => {
-          const externalId = localIcsRecords?.[index]?.externalId
-          if (externalId) {
-            const before = db.prepare(`SELECT id FROM items WHERE external_id = ?`).get(externalId) as
-              { id: string } | undefined
-            const id = upsertByExternalId(db, ctx, fragment.id, externalId, e)
-            if (before) updated += 1
-            else created += 1
-            return id
-          }
-          created += 1
-          const id = insertItem(db, ctx, e)
-          addItemSource(db, ctx, id, fragment.id)
-          addItemCitations(db, id, fragment.id, e)
-          return id
-        })
-        const items = itemIds.map((id) => getItem(db, id) as ItemWithSources)
+        const applied = applyMapped(db, ctx, fragment.id, mapStructured(ctx, fragment))
+        const items = applied.itemIds.map((id) => getItem(db, id) as ItemWithSources)
         finishRun(db, ctx, run.id, 'done', items.length === 0
           ? '没有需要记录的内容。原文已存。'
           : '已记下。原文已存。', {
-          created,
-          updated,
+          created: applied.created,
+          updated: applied.updated,
           dropped: 0,
           needsConfirm: items.filter((i) => i.status === 'needs_confirm').length,
         })
@@ -638,21 +652,46 @@ export function createRoutes(
     const candidates = listItems(db).filter(
       (i) => (i.type === 'event' || i.type === 'task') && i.status === 'active',
     )
-    const recurring = candidates.filter((i) => i.rrule !== null)
+    /*
+     * 重复项归到它真正发生的那几天，不堆在页顶。
+     *
+     * 页顶一条总的细带在库里只有几条重复项时读得过去，教务同步一接上就不行了：
+     * 一学期十几门课全挤在那一条里，而「今天有没有课、几点」——日程页上最该一眼
+     * 看到的东西——反倒一个字都没有。
+     */
+    /*
+     * `recurrence` 是模型写的自由字符串，随时会出现一条我们放不下的规则。
+     * **放不下不等于不存在**：那种条目退回按 startsAt 当成一条普通的事，落在它
+     * 第一次发生的那天。既不让整页 500，也不让它悄悄从日程上消失。
+     */
+    const placeable = (i: ItemWithSources) =>
+      i.rrule !== null && i.startsAt !== null && supportsRrule(i.rrule)
+    const recurring = candidates.filter(placeable)
     const withDate = candidates
-      .filter((i) => !i.rrule && (i.startsAt ?? i.dueAt))
+      .filter((i) => !placeable(i) && (i.startsAt ?? i.dueAt))
       .map((i) => ({ item: i, day: (i.startsAt ?? i.dueAt)!.slice(0, 10) }))
       .filter((x) => x.day >= from && x.day <= to)
       .sort((a, b) => a.day.localeCompare(b.day)
         || (a.item.startsAt ?? a.item.dueAt ?? '').localeCompare(b.item.startsAt ?? b.item.dueAt ?? ''))
 
-    const days: { day: string; items: unknown[] }[] = []
-    for (const x of withDate) {
-      const last = days.at(-1)
-      if (last && last.day === x.day) last.items.push(withProject(x.item))
-      else days.push({ day: x.day, items: [withProject(x.item)] })
+    const byDay = new Map<string, { items: unknown[]; recurring: unknown[] }>()
+    const bucket = (day: string) => {
+      let b = byDay.get(day)
+      if (!b) { b = { items: [], recurring: [] }; byDay.set(day, b) }
+      return b
     }
-    return c.json({ from, to, days, recurring: recurring.map(withProject) })
+    for (const x of withDate) bucket(x.day).items.push(withProject(x.item))
+    for (const day of daysInRange(from, to)) {
+      for (const item of recurring) {
+        if (occursOn(item.rrule!, item.startsAt!, day)) bucket(day).recurring.push(withProject(item))
+      }
+    }
+
+    // 只有课的那天照样是一天。少了这一步，「今天三节课、没有别的事」在日程上是空的。
+    const days = [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, b]) => ({ day, ...b }))
+    return c.json({ from, to, days })
 
     function withProject(item: ItemWithSources) {
       return {
@@ -687,6 +726,189 @@ export function createRoutes(
     return c.json({
       settings: Object.fromEntries(SETTING_KEYS.map((k) => [k, getSetting(db, k)])),
     })
+  })
+
+  // ── 和外部来源同步 ──────────────────────────────────────────────────
+  /*
+   * 登录不在这里发生，也不可能在这里发生：CAS 的登录页带验证码、短信码和一段前端
+   * 加密的密码，无头重放那套表单是在猜一个会变的东西，猜错的代价是真实账号被锁。
+   * 所以密码从不进入本程序——用户在 desktop 开的一个真浏览器窗口里登录一次，那次
+   * 登录留下的 Cookie POST 到下面这个口，之后取数全由 server 自己发出。
+   *
+   * server 因此仍然不知道 Electron 存在：它只认一批 Cookie。
+   */
+  app.get('/api/sync', (c) => c.json(readSyncStatus(db, !cookies.isEmpty)))
+
+  app.post('/api/sync/session', async (c) => {
+    const ctx = ctxOf()
+    const body = SessionBody.safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '登录态参数不对', issues: body.error.issues }, 400)
+
+    const saved = cookies.importFromBrowser(body.data.cookies)
+    if (saved === 0) return c.json({ error: '这次登录没有带回任何 Cookie' }, 400)
+    markSignedIn(db, ctx)
+    broadcastChanged(ctx.now)
+    return c.json({ saved, status: readSyncStatus(db, !cookies.isEmpty) })
+  })
+
+  app.delete('/api/sync/session', (c) => {
+    cookies.clear()
+    broadcastChanged(ctxOf().now)
+    return c.json({ status: readSyncStatus(db, false) })
+  })
+
+  // ── 邮箱账号 ────────────────────────────────────────────────────────
+  /*
+   * 账号住在库里而不是配置文件里，因为它要能在设置页上随时增删改。
+   *
+   * **盘上只有密文，内存里才有明文。** 密文由桌面端用系统钥匙串加好再送来，
+   * 这个进程解不开它——server 不依赖 Electron，钥匙也不在库里。明文单独走一趟，
+   * 落在 secrets 那个 Map 里，进程退出即无。所以：
+   *
+   *   - 新加 / 改密码：界面同时送密文与明文。同一条 localhost 请求里两样都有，
+   *     看着多余，其实不是——加密防的是**盘上**被读走，不是这一跳。
+   *   - 冷启动：桌面端把库里的密文解开一批，POST 到 /unlock。
+   *   - `pnpm dev:server` 单跑：没有能解钥匙串的东西，于是没有明文，邮箱那一路
+   *     明说「需要在桌面应用里解锁」。这是对的，不是缺陷。
+   */
+  const MailAccountBody = z.object({
+    host: z.string().min(1),
+    port: z.number().int().positive(),
+    username: z.string().min(1),
+    /** base64，系统钥匙串加密后的密文。落库的是它 */
+    passwordCipher: z.string().min(1),
+    /** 同一串授权码的明文。只进内存，不落库 */
+    password: z.string().min(1),
+    perRun: z.number().int().nonnegative(),
+  })
+
+  /** 返回给界面的账号。**永远不带密文，也永远不带明文。** */
+  const publicAccount = (a: MailAccount) => ({
+    id: a.id,
+    host: a.host,
+    port: a.port,
+    username: a.username,
+    perRun: a.perRun,
+    enabled: a.enabled,
+    /** 这个进程手上有没有它的明文。没有就是「需要在桌面应用里解锁」 */
+    unlocked: secrets.has(a.id),
+  })
+
+  app.get('/api/mail-accounts', (c) =>
+    c.json({ accounts: listMailAccounts(db).map(publicAccount) }))
+
+  /**
+   * 桌面端专用：连密文一起拿走，好把它交给系统钥匙串解开。
+   *
+   * 与上面那条分开，是为了让「界面要的」和「桌面端要的」在类型上就不是一回事——
+   * 密文没有任何理由出现在渲染进程里。
+   */
+  app.get('/api/mail-accounts/locked', (c) => c.json({
+    accounts: listMailAccounts(db)
+      .filter((a) => a.enabled && !secrets.has(a.id))
+      .map((a) => ({ id: a.id, passwordCipher: a.passwordCipher })),
+  }))
+
+  app.post('/api/mail-accounts/unlock', async (c) => {
+    const body = z.record(z.string(), z.string()).safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '解锁参数不对', issues: body.error.issues }, 400)
+
+    for (const [id, password] of Object.entries(body.data)) {
+      if (getMailAccount(db, id) === null) return c.json({ error: `邮箱账号不存在：${id}` }, 404)
+      secrets.unlock(id, password)
+    }
+    broadcastChanged(ctxOf().now)
+    return c.json({ accounts: listMailAccounts(db).map(publicAccount) })
+  })
+
+  app.post('/api/mail-accounts', async (c) => {
+    const ctx = ctxOf()
+    const body = MailAccountBody.safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '邮箱参数不对', issues: body.error.issues }, 400)
+
+    const { password, ...stored } = body.data
+    let account: MailAccount
+    try {
+      account = createMailAccount(db, ctx, stored)
+    } catch (e) {
+      // 唯一索引撞了：同一个邮箱加两遍会把每封信喂两次模型，而那只在账单上看得出来。
+      const message = e instanceof Error && e.message.includes('UNIQUE')
+        ? `${stored.username} 已经加过了`
+        : e instanceof Error ? e.message : String(e)
+      return c.json({ error: message }, 409)
+    }
+    secrets.unlock(account.id, password)
+    broadcastChanged(ctx.now)
+    return c.json({ account: publicAccount(account) })
+  })
+
+  app.patch('/api/mail-accounts/:id', async (c) => {
+    const ctx = ctxOf()
+    const id = c.req.param('id')
+    if (getMailAccount(db, id) === null) return c.json({ error: '邮箱账号不存在' }, 404)
+
+    // 改密码时两样一起给；只改端口之类时两样都不给。给一半是错的，说清楚。
+    // `enabled` 只在这里出现，不在新建那份里：新加的账号一定是启用的。
+    const body = MailAccountBody.partial().extend({ enabled: z.boolean().optional() })
+      .safeParse(await c.req.json())
+    if (!body.success) return c.json({ error: '邮箱参数不对', issues: body.error.issues }, 400)
+    const { password, ...patch } = body.data
+    if ((password === undefined) !== (patch.passwordCipher === undefined)) {
+      return c.json({ error: '改授权码要同时给密文与明文' }, 400)
+    }
+
+    const account = updateMailAccount(db, ctx, id, patch)
+    if (password !== undefined) secrets.unlock(id, password)
+    broadcastChanged(ctx.now)
+    return c.json({ account: publicAccount(account) })
+  })
+
+  app.delete('/api/mail-accounts/:id', (c) => {
+    const id = c.req.param('id')
+    deleteMailAccount(db, id)
+    secrets.forget(id)
+    broadcastChanged(ctxOf().now)
+    return c.json({ accounts: listMailAccounts(db).map(publicAccount) })
+  })
+
+  /**
+   * 连一次试试。
+   *
+   * 加账号的时候当场问一次，比等六小时后在状态行上看见一句「同步失败」有用得多：
+   * 主机写错、端口不对、授权码填成了登录密码，三种在状态行上长得一模一样，而
+   * 下一步完全不同。
+   */
+  app.post('/api/mail-accounts/:id/test', async (c) => {
+    const account = getMailAccount(db, c.req.param('id'))
+    if (account === null) return c.json({ error: '邮箱账号不存在' }, 404)
+    const password = secrets.get(account.id)
+    if (password === null) return c.json({ error: '需要在桌面应用里解锁' }, 409)
+    try {
+      return c.json({ ok: true, ...(await testMailbox(account, password)) })
+    } catch (e) {
+      return c.json({ ok: false, message: e instanceof Error ? e.message : String(e) })
+    }
+  })
+
+  /**
+   * 同步一次。启动、六小时的定时、设置页的按钮，三个触发点都打这一个口。
+   *
+   * **同一时刻只跑一轮。** 三个触发点会撞上——开机时定时器和启动那一次几乎同时
+   * 到——两轮并行地往同一批 external_id 上写，得到的是一堆本不该有的 item_history。
+   * 撞上时回 409，调用方不重试：正在跑的那一轮会把活干完。
+   */
+  app.post('/api/sync', async (c) => {
+    if (syncing) return c.json({ error: '正在同步' }, 409)
+    syncing = true
+    const ctx = ctxOf()
+    try {
+      const result = await runSync({
+        db, ctx, config, cookies, secrets, onChanged: () => broadcastChanged(ctx.now),
+      })
+      return c.json({ ...result, status: readSyncStatus(db, !cookies.isEmpty) })
+    } finally {
+      syncing = false
+    }
   })
 
   /** 想法页：倒序的流，既没有时间也不属于项目。 */
@@ -866,6 +1088,13 @@ function isConnectionError(e: unknown): boolean {
 }
 
 /** 从 ISO 时刻字符串（带 +08:00）往后推 n 天，返回 YYYY-MM-DD。 */
+/** 区间里的每一天，两端都含。 */
+function daysInRange(from: string, to: string): string[] {
+  const days: string[] = []
+  for (let day = from; day <= to; day = daysFrom(`${day}T12:00:00+08:00`, 1)) days.push(day)
+  return days
+}
+
 function daysFrom(iso: string, n: number): string {
   const d = new Date(iso)
   d.setDate(d.getDate() + n)

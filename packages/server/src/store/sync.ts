@@ -90,18 +90,12 @@ export function buildCapabilities(
   // enough to claim that a source can be queried: the broker seam must also
   // be present.  Keep this mapping explicit so settings never says "可用"
   // while the server would only produce an unsupported run.
-  // Keep the legacy config guard for standalone server callers that have no
-  // broker.  A desktop broker is authoritative when present and may provide
-  // a transport without putting a password in ServerConfig.
-  const credentialsConfigured = Boolean(
-    config.ruc?.studentId.trim() && config.ruc.password.length > 0,
-  )
-  const status = !authorized || (!credentialsConfigured && !onlineAdapterAvailable)
+  // 配置里那对学号密码已经不存在了：鉴权是一次真人登录加 Cookie 搬运，程序不碰
+  // 密码。所以「能不能查」只剩下两件事——登录过没有，以及这一侧有没有取数的通道。
+  const status = !authorized || !onlineAdapterAvailable
     ? 'unauthorized' as const
-    : onlineAdapterAvailable
-      ? 'available' as const
-      : 'unsupported' as const
-  const reason = !authorized || (!credentialsConfigured && !onlineAdapterAvailable)
+    : 'available' as const
+  const reason = !authorized
     ? 'ruc_login_required'
     : onlineAdapterAvailable
       ? null

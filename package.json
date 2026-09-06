@@ -12,10 +12,12 @@
     "dev:desktop": "pnpm --filter @flowpal/electron dev",
     "build:electron": "pnpm --filter @flowpal/electron build",
     "check:fixtures": "pnpm --filter @flowpal/server check:fixtures",
+    "check:sync": "pnpm --filter @flowpal/server check:sync",
+    "sync:once": "pnpm --filter @flowpal/server sync:once",
     "bench:now": "pnpm --filter @flowpal/server bench:now",
     "check:tokens": "pnpm --filter @flowpal/app check:tokens",
     "check:markup": "pnpm --filter @flowpal/shared check:markup",
-    "check": "pnpm typecheck && pnpm check:tokens && pnpm check:markup && pnpm check:fixtures",
+    "check": "pnpm typecheck && pnpm check:tokens && pnpm check:markup && pnpm check:sync && pnpm check:fixtures",
     "demo:reset": "pnpm --filter @flowpal/server demo:reset",
     "test:sync": "pnpm --filter @flowpal/server test:sync",
     "typecheck": "pnpm -r exec tsc --noEmit"

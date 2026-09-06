@@ -27,7 +27,7 @@ export function SettingsView() {
 
   useEffect(() => {
     let alive = true
-    Promise.allSettled([api.getSettings(), api.getSyncStatus()]).then(([settingsResult, syncResult]) => {
+    Promise.allSettled([api.getSettings(), api.getSyncRunStatus()]).then(([settingsResult, syncResult]) => {
       if (!alive) return
       if (settingsResult.status === 'fulfilled') {
         setSettings(settingsResult.value.settings)
@@ -90,7 +90,7 @@ export function SettingsView() {
         if (latest) {
           setSync(latest.sync)
         } else {
-          const latestSync = await api.getSyncStatus().catch(() => null)
+          const latestSync = await api.getSyncRunStatus().catch(() => null)
           if (latestSync) setSync(latestSync.status)
         }
         setStatus('dirty')
@@ -108,7 +108,7 @@ export function SettingsView() {
     setMessage(null)
     try {
       const result = await api.runSync(null, mode)
-      const next = await api.getSyncStatus()
+      const next = await api.getSyncRunStatus()
       setSync(next.status)
       const run = result.run
       if (run?.status === 'succeeded') {

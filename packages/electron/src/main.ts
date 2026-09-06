@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer, loadConfig, type RunningServer } from '@flowpal/server'
+import { signInToRuc } from './ruc/login-window.ts'
+import { encryptSecret, unlockAll } from './mail/secrets.ts'
 import {
   IPC_CHANNELS,
   type InlinePetGeometry,
@@ -34,8 +36,13 @@ app.setName('FlowPal')
 
 let mainWindow: BrowserWindow | null = null
 let petWindow: BrowserWindow | null = null
-let rucLoginWindow: BrowserWindow | null = null
 let server: RunningServer | null = null
+/** 本机服务的 token。局域网监听时才有，登录与解锁那两跳要带上它 */
+let apiToken: string | null = null
+/** 同步间隔，分钟。跟着配置走 */
+let syncIntervalMinutes = 360
+/** 定时同步。开机拉一次，之后按配置的间隔再拉 */
+let syncTimer: ReturnType<typeof setInterval> | null = null
 let appLocation: AppLocation | null = null
 let ipcHandlers: IpcHandlerController | null = null
 let quitting = false
@@ -123,6 +130,9 @@ function startServerIfConfigured(repoRoot: string): RunningServer | null {
         }
       })()
     const running = createServer(config, { rucBroker: createRucOnlineBroker() })
+    const typed = config as { token?: string | null; sync?: { intervalMinutes?: number } }
+    apiToken = typed.token ?? null
+    syncIntervalMinutes = typed.sync?.intervalMinutes ?? syncIntervalMinutes
     console.info(`FlowPal server: ${running.url}${existsSync(configPath) ? '' : ' (offline config)'}`)
     return running
   } catch (error) {
@@ -131,30 +141,69 @@ function startServerIfConfigured(repoRoot: string): RunningServer | null {
   }
 }
 
+/**
+ * 现在就同步一次。
+ *
+ * **失败不重试，也不弹任何东西。** 下一个周期自然会再试；写重试循环只会把一个明确
+ * 的失败变成一串看不见的失败。失败的落点是设置页上那一行状态。
+ */
+async function syncNow(): Promise<void> {
+  if (!server) return
+  const res = await fetch(`${server.url}/api/sync`, {
+    method: 'POST',
+    headers: apiToken === null ? {} : { Authorization: `Bearer ${apiToken}` },
+  }).catch((e: unknown) => {
+    console.error('同步没能发出：', e)
+    return null
+  })
+  // 409 是「已经有一轮在跑」，不是失败：开机那一次和定时器会撞上
+  if (res !== null && res.status !== 409) console.info(`同步：${await res.text()}`)
+}
+
+/**
+ * 先解锁邮箱再同步，顺序不能反：库里存的是密文，只有这一侧解得开。反过来的话，
+ * 开机那一次同步会把每个邮箱都跳过，状态行上写着「需要在桌面应用里解锁」，
+ * 而用户就在桌面应用里。
+ *
+ * 解锁失败也照样同步——门户那两路跟邮箱没关系，不该被它拖住。
+ */
+function startSyncLoop(): void {
+  if (!server) return
+  unlockAll(server.url, apiToken)
+    .then((n) => { if (n > 0) console.info(`已解锁 ${n} 个邮箱账号`) })
+    .catch((e: unknown) => console.error('解锁邮箱账号失败：', e))
+    .finally(() => void syncNow())
+  syncTimer = setInterval(() => void syncNow(), syncIntervalMinutes * 60_000)
+}
+
 function windowState(): DesktopWindowState {
   return {
     getMain: () => mainWindow,
     getPet: () => petWindow,
     getInlinePetGeometry: () => inlinePetGeometry,
     setInlinePetGeometry: (geometry) => { inlinePetGeometry = geometry },
-    openRucLogin: () => {
-      if (rucLoginWindow && !rucLoginWindow.isDestroyed()) {
-        rucLoginWindow.focus()
-        return
+    /*
+     * 登录窗口只能开在这里：它需要一个真的浏览器，而全仓库只有这一侧有。
+     * 采到的 Cookie 立刻交给 server，之后取数全由 server 自己发出——它照旧只认
+     * 一批 Cookie，不知道有过一个窗口。
+     */
+    openRucLogin: async () => {
+      if (!server) return { ok: false as const, message: '本机服务还没起来' }
+      const result = await signInToRuc(server.url, apiToken)
+      // 刚拿到登录态，立刻同步一次：让用户在设置页上当场看见结果，而不是等六小时
+      if (result.ok) void syncNow()
+      return result
+    },
+    /*
+     * 加密同样只能在这里：钥匙在系统钥匙串里，渲染进程和 server 都够不着。
+     * 界面拿回密文之后连同明文一起 POST 给 server——落库的是密文，明文只进内存。
+     */
+    encryptSecret: (plain) => {
+      try {
+        return { ok: true as const, cipher: encryptSecret(plain) }
+      } catch (e) {
+        return { ok: false as const, message: e instanceof Error ? e.message : String(e) }
       }
-      rucLoginWindow = new BrowserWindow({
-        width: 520,
-        height: 700,
-        title: '登录 RUC',
-        webPreferences: {
-          partition: 'persist:ruc',
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: true,
-        },
-      })
-      rucLoginWindow.on('closed', () => { rucLoginWindow = null })
-      void rucLoginWindow.loadURL('https://my.ruc.edu.cn/')
     },
     forwardDesktopInput: (input) => {
       const win = mainWindow
@@ -599,6 +648,7 @@ if (!acquireSingleInstance({ focusExisting: focusExistingInstance })) {
 
     const repoRoot = resolveRepoRoot(app.getAppPath())
     server = startServerIfConfigured(repoRoot)
+    startSyncLoop()
 
     const preload = preloadPath()
     if (!existsSync(preload)) throw new Error(`preload 文件缺失：${preload}`)
@@ -658,6 +708,8 @@ function cleanup(): void {
   minimizedFloatingTimer = null
   if (floatingRecoveryTimer !== null) clearTimeout(floatingRecoveryTimer)
   floatingRecoveryTimer = null
+  if (syncTimer !== null) clearInterval(syncTimer)
+  syncTimer = null
   ipcHandlers?.dispose()
   ipcHandlers = null
   try {

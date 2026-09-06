@@ -72,6 +72,43 @@ export const mockApi: Api = {
   // 样例模式下向导已经走完，否则一开界面就是欢迎页，对不了版式
   patchSettings: () => Promise.reject(new Error('样例模式下不写入数据。')),
 
+  // 样例模式下当作已经登录、刚同步过：这一页的版式要在有内容时对得上。
+  getSyncStatus: () => delay({
+    state: 'ok' as const,
+    at: SETTLED_LONG_AGO,
+    message: '新增 0 条 · 更新 24 条',
+    sources: [
+      { label: '课表与校历', created: 0, updated: 24, state: 'ok' as const, note: null },
+      { label: '通知公告', created: 1, updated: 0, state: 'ok' as const, note: null },
+      { label: '邮件（2021xxxxxx@ruc.edu.cn）', created: 2, updated: 0, state: 'ok' as const, note: null },
+    ],
+    signedIn: true,
+    signedInAt: SETTLED_LONG_AGO,
+  }),
+
+  syncNow: () => Promise.reject(new Error('样例模式下不写入数据。')),
+
+  signOutOfRuc: () => Promise.reject(new Error('样例模式下不写入数据。')),
+
+  // 两个账号，一个正常一个锁着——这一页要在两种状态并存时也对得上版式。
+  listMailAccounts: () => delay({
+    accounts: [
+      {
+        id: 'mal_ruc', host: 'imap.ruc.edu.cn', port: 993,
+        username: '2021xxxxxx@ruc.edu.cn', perRun: 3, enabled: true, unlocked: true,
+      },
+      {
+        id: 'mal_gmail', host: 'imap.gmail.com', port: 993,
+        username: 'me@gmail.com', perRun: 2, enabled: true, unlocked: false,
+      },
+    ],
+  }),
+
+  addMailAccount: () => Promise.reject(new Error('样例模式下不写入数据。')),
+  patchMailAccount: () => Promise.reject(new Error('样例模式下不写入数据。')),
+  removeMailAccount: () => Promise.reject(new Error('样例模式下不写入数据。')),
+  testMailAccount: () => Promise.reject(new Error('样例模式下不写入数据。')),
+
   postFocusSession: () => Promise.reject(new Error('样例模式下不写入数据。')),
 
   uploadImage: () => Promise.reject(new Error('样例模式下不写入数据。')),
@@ -104,7 +141,7 @@ export const mockApi: Api = {
 
   saveSettings: () => Promise.reject(new Error('样例模式不写入。要试设置请关掉它。')),
 
-  getSyncStatus: () => delay({
+  getSyncRunStatus: () => delay({
     status: { runningRunId: null, nextRunAt: null, capabilities: [], recentRuns: [] },
   }),
 
